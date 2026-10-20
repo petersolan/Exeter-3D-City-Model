@@ -1,4 +1,4 @@
-"""Download bridges, railways and platforms for the AOI from OpenStreetMap (Overpass API).
+"""Download bridges, railways, platforms, power towers and lines for the AOI from OpenStreetMap (Overpass API).
 
 OS open data has railway centrelines (Zoomstack) but no bridges, viaducts or
 footbridges: OS Open Roads holds roads only and marks no bridges. OpenStreetMap
@@ -12,6 +12,9 @@ Writes data/osm/structures.gpkg, layers (EPSG:27700):
   bridge_ways      ways tagged as a bridge (kind, width_m: tagged width or a default)
   railway          railway lines (bridge flag; tunnels left out)
   platforms        railway platforms (polygons)
+  towers           power towers and poles, masts and towers (points; kind = the power or
+                   man_made value): tall standalone structures that look like trees
+  power_lines      overhead power lines (power=line / minor_line)
 Data (c) OpenStreetMap contributors, ODbL.
 
 Usage: python prepare_osm_structures.py
@@ -53,6 +56,9 @@ def query() -> list[dict]:
       way["railway"]({bb});
       way["railway"="platform"]({bb});
       way["public_transport"="platform"]["train"="yes"]({bb});
+      node["power"~"^(tower|pole|portal)$"]({bb});
+      node["man_made"~"^(mast|tower|communications_tower)$"]({bb});
+      way["power"~"^(line|minor_line)$"]({bb});
     );
     out tags geom;"""
     headers = {"User-Agent": "LiDAR-Building-Footprints/1.0 (portfolio project)"}
@@ -83,14 +89,23 @@ def kind_of(tags: dict) -> str:
 
 def main():
     elements = query()
-    rows = {"bridge_outlines": [], "bridge_ways": [], "railway": [], "platforms": []}
+    rows = {"bridge_outlines": [], "bridge_ways": [], "railway": [], "platforms": [], "towers": [],
+            "power_lines": []}
     for e in elements:
         tags, pts = e.get("tags", {}), [(p["lon"], p["lat"]) for p in e.get("geometry", [])]
+        if e["type"] == "node":
+            kind = tags.get("power") or tags.get("man_made")
+            rows["towers"].append({"osm_id": e["id"], "kind": kind, "height": tags.get("height"),
+                                   "tags": json.dumps(tags), "geometry": shapely.Point(e["lon"], e["lat"])})
+            continue
         if len(pts) < 2:
             continue
         closed = len(pts) >= 4 and pts[0] == pts[-1]
         line = shapely.LineString(pts)
         base = {"osm_id": e["id"], "name": tags.get("name"), "tags": json.dumps(tags)}
+        if tags.get("power") in ("line", "minor_line"):
+            rows["power_lines"].append(base | {"power": tags["power"], "geometry": line})
+            continue
         if tags.get("man_made") == "bridge" and closed:
             rows["bridge_outlines"].append(base | {"geometry": shapely.Polygon(pts)})
         elif tags.get("railway") == "platform" or tags.get("public_transport") == "platform":

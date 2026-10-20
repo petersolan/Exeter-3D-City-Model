@@ -11,7 +11,7 @@ Ordnance Survey's detailed building data alongside three free alternatives: **Mi
 Building Footprints**, **OpenStreetMap** and **OS Open** buildings.
 
 **[Live 3D viewer](https://petersolan.github.io/Exeter-3D-City-Model/)**: 12,651 buildings
-extruded by roof height, 127,704 tree crowns and the LiDAR terrain.
+extruded by roof height, 127,615 tree crowns and the LiDAR terrain.
 
 **In short:** on area the LiDAR buildings score highest of the free datasets (F1 0.836, against
 0.808 for OpenStreetMap and 0.782 for Microsoft), each quadrant scored by a model that never
@@ -141,11 +141,18 @@ decks look like flat roofs to the LiDAR. With OpenStreetMap's bridges, viaducts 
   keep their original id and get new heights.
 
 **Tree crowns.** Tree tops are local maxima of the smoothed canopy (at least 4 m tall and 3 m apart);
-each crown grows from its top by a watershed within the vegetation: **127,704 crowns**,
+each crown grows from its top by a watershed within the vegetation: **127,615 crowns**,
 median height 14.0 m (10th–90th percentile 6.9–24.6 m) and median crown diameter 10.1 m. In dense
 woodland one crown can hold several trees. Single non-vegetation pixels inside a crown leave
-1 m² holes; `tree_crowns_filled.gpkg` closes every hole under 1.02 m² (85,275 of 99,035) while keeping
+1 m² holes; `tree_crowns_filled.gpkg` closes every hole under 1.02 m² (85,188 of 98,932) while keeping
 the crown outlines, which a convex hull would not, and is the layer shown in the viewer.
+
+**Pylons and masts.** A lattice tower looks like a spiky crown: one tall tip over a sparse frame. A
+crown within 10 m of a power tower or mast mapped in OpenStreetMap whose spikiness (1 − median /
+maximum height) is at least 0.45 is a structure, not a tree: crowns near mapped towers have a median
+spikiness of 0.66, other crowns over 20 m 0.29. These 89 crowns (84 pylons, 5 masts) are dropped and
+their pixels taken out of the vegetation raster. Unmapped tall, spiky crowns are kept: a tall
+conifer looks the same.
 
 **Web viewer** (`11_export_web.py`, `site/`): MapLibre with the LiDAR DTM as 3D terrain and
 hillshade (terrain-RGB tiles), buildings and tree crowns as vector PMTiles (written by GDAL) and
@@ -448,7 +455,8 @@ All under `outputs/`:
 | `canopy/vegetation_height.tif` (+ `.qml` style) | Canopy height (m) on vegetation pixels, no data elsewhere: click a pixel in QGIS |
 | `canopy/tree_crowns.gpkg` | Tree crowns with height and crown diameter |
 | `canopy/tree_crowns_filled.gpkg` | The same crowns with single-pixel holes closed (shown in the viewer) |
-| `canopy/removed.tif` | Tall pixels taken out of vegetation: 1 smooth, 2 not green, 3 above 50 m, 4 mapped bridge |
+| `canopy/removed.tif` | Tall pixels taken out of vegetation: 1 smooth, 2 not green, 3 above 50 m, 4 mapped bridge, 5 mapped pylon or mast |
+| `canopy/removed_towers.gpkg` | Crowns dropped as mapped pylons and masts, with spikiness and distance to the tower |
 | `eval/canopy_summary.csv` | Vegetation per quadrant |
 | `eval/heights.csv`, `eval/heights_pairs.csv` | Height errors against OS overall, per quadrant and class; every matched pair |
 
@@ -473,8 +481,9 @@ scripts/
   10_building_heights.py    heights per footprint, checked against OS heights
   11_export_web.py          buildings, trees, railways (PMTiles / GeoJSON) and terrain tiles for the viewer
   12_canopy_height.py       vegetation height raster, structure removal, bridge deletion and viaduct cut
-  13_tree_crowns.py         individual tree crowns from the canopy height model, and a hole-filled copy
-  prepare_osm_structures.py bridges, viaducts, railways and platforms from OpenStreetMap
+  13_tree_crowns.py         tree crowns from the canopy height model (mapped pylons dropped), and a
+                            hole-filled copy
+  prepare_osm_structures.py bridges, viaducts, railways, platforms, pylons and masts from OpenStreetMap
   prepare_rail.py           railway lines from OS Open Zoomstack (bridge rule)
   explain_building.py       which extraction step loses given OS buildings
   build_check_project.py    QGIS project for checking the results (run with QGIS's Python)
@@ -536,7 +545,7 @@ The input data is not included in this repository. Expected layout under `data/`
 | `footprints/osm_buildings.parquet` | OpenStreetMap | ODbL |
 | `footprints/os_buildings.parquet` | OS Open building data | OGL v3 |
 | `roads/SX_RoadLink.shp` | OS Open Roads, road links: bridge rule (and `use_roads`) | OGL v3 |
-| `osm/structures.gpkg` | OpenStreetMap bridges, viaducts, railways and platforms, from `prepare_osm_structures.py` (Overpass API) | ODbL |
+| `osm/structures.gpkg` | OpenStreetMap bridges, viaducts, railways, platforms, power towers, masts and power lines, from `prepare_osm_structures.py` (Overpass API) | ODbL |
 | `roads/zoomstack_rail.gpkg` | OS Open Zoomstack railway lines, cut by `prepare_rail.py` | OGL v3 |
 
 Sentinel-2 L2A is downloaded by `07_sentinel2_ndvi.py` from
