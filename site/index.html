@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Exeter LiDAR Buildings</title>
-<meta name="description" content="12,654 building footprints and roof heights extracted from Environment Agency LiDAR for Exeter, shown in 3D.">
+<title>Exeter 3D City Model</title>
+<meta name="description" content="A 3D city model of Exeter from Environment Agency LiDAR: building footprints with heights, individual tree crowns and the terrain, validated against Ordnance Survey.">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: full-screen map with one floating panel (title, legend, controls, credits). */
+/* Layout: full-screen map with one floating panel (title, legend, layers, credits). */
 :root{--bg:#f3f6f6;--surface:#fff;--ink:#0f1f26;--ink2:#41545c;--muted:#6f8189;--line:#dbe3e5;--accent:#0b6e64;
  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;color-scheme:light}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1417;--surface:#141d21;--ink:#e8f0f1;--ink2:#b3c3c7;
@@ -20,11 +20,17 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:15px/1
 #map{position:absolute;inset:0}
 .panel{position:absolute;top:12px;left:12px;width:min(340px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;
  background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 16px 12px;box-shadow:0 4px 18px rgba(0,0,0,.12)}
-h1{font-size:19px;line-height:1.25;margin:0 0 6px}
-.lede{margin:0 0 12px;color:var(--ink2);font-size:14px}
+h1{font-size:19px;line-height:1.25;margin:0 0 2px}
+.sub{font:500 12px/1.3 var(--mono);color:var(--muted);margin:0 0 8px;letter-spacing:.02em}
+.lede{margin:0 0 10px;color:var(--ink2);font-size:14px}
 .eyebrow{font:500 11.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
-.ramp{height:10px;border-radius:3px;background:linear-gradient(90deg,#fff2cc,#f6c27a,#e8673c,#b3122e,#4a0a45)}
+.ramp{height:10px;border-radius:3px}
+.ramp.bld{background:linear-gradient(90deg,#fff2cc,#f6c27a,#e8673c,#b3122e,#4a0a45)}
+.ramp.tree{background:linear-gradient(90deg,#d9f0a3,#78c679,#31a354,#006837,#00341c)}
 .ticks{display:flex;justify-content:space-between;font:500 12px/1 var(--mono);color:var(--muted);margin-top:4px}
+.layers{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:13.5px;color:var(--ink2)}
+.layers label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.layers input{accent-color:var(--accent)}
 .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .seg button{flex:1;border:0;background:none;color:var(--ink2);font:500 13px var(--sans);padding:7px 4px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
@@ -42,40 +48,63 @@ a{color:var(--accent)}
 </style>
 </head>
 <body>
-<div id="map" role="region" aria-label="3D map of building footprints in Exeter"></div>
+<div id="map" role="region" aria-label="3D city model of Exeter: buildings, trees and terrain"></div>
 <aside class="panel" id="panel">
   <button class="toggle" id="toggle" aria-expanded="true">Hide</button>
-  <h1>Exeter buildings from LiDAR</h1>
-  <p class="lede">Footprints and roof heights extracted from Environment Agency 1&nbsp;m LiDAR for 100&nbsp;km² of Exeter,
-    with no building data as input. Click a building for its heights.</p>
-  <div class="eyebrow">Roof height above ground (95th percentile)</div>
-  <div class="ramp"></div>
+  <h1>Exeter 3D City Model</h1>
+  <p class="sub">LiDAR digital twin base layer</p>
+  <p class="lede">Buildings with roof heights, individual tree crowns and the ground surface, all derived from
+    Environment Agency 1&nbsp;m LiDAR for 100&nbsp;km² of Exeter, with no building or tree data as input.
+    Click a building or a tree.</p>
+  <div class="eyebrow">Building height (roof, 95th percentile)</div>
+  <div class="ramp bld"></div>
   <div class="ticks"><span>3 m</span><span>5</span><span>8</span><span>12</span><span>20+ m</span></div>
+  <div class="eyebrow">Tree height</div>
+  <div class="ramp tree"></div>
+  <div class="ticks"><span>4 m</span><span>10</span><span>15</span><span>20</span><span>30+ m</span></div>
+  <div class="eyebrow">Layers</div>
+  <div class="layers">
+    <label><input type="checkbox" id="l-buildings" checked> Buildings</label>
+    <label><input type="checkbox" id="l-trees" checked> Trees</label>
+    <label><input type="checkbox" id="l-terrain" checked> 3D terrain</label>
+    <label><input type="checkbox" id="l-hillshade" checked> Hillshade</label>
+    <label><input type="checkbox" id="l-rail" checked> Railways</label>
+  </div>
   <div class="eyebrow">View</div>
   <div class="seg" role="group" aria-label="View">
-    <button id="v3d" aria-pressed="true">3D blocks</button><button id="v2d" aria-pressed="false">2D footprints</button>
+    <button id="v3d" aria-pressed="true">3D</button><button id="v2d" aria-pressed="false">2D</button>
   </div>
   <div class="stats">
-    <div><b>12,654</b><span>footprints</span></div>
-    <div><b>0.836</b><span>area F1 vs OS</span></div>
-    <div><b>88%</b><span>height within 2&nbsp;m</span></div>
+    <div><b id="s-buildings">…</b><span>buildings</span></div>
+    <div><b id="s-trees">…</b><span>tree crowns</span></div>
+    <div><b id="s-f1">…</b><span>area F1 vs OS</span></div>
   </div>
-  <p class="credits">Scores are against Ordnance Survey's detailed building data, which isn't shown here because it can't be
-    redistributed. Method and evaluation: <a href="https://github.com/petersolan/LiDAR-Building-Footprints">repository</a>.<br>
+  <p class="credits">Building scores are against Ordnance Survey's detailed building data, which isn't shown here
+    because it can't be redistributed. Method and evaluation: <a href="https://github.com/petersolan/Exeter-3D-City-Model">repository</a>.<br>
     Environment Agency information © Environment Agency and/or database right, licensed under the
     <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/">Open Government Licence v3.0</a>
     (LiDAR DSM and DTM). Contains modified Copernicus Sentinel data 2022.
-    OS data © Crown copyright and database right 2026 (OS Open Roads, Zoomstack railways).</p>
+    OS data © Crown copyright and database right 2026 (OS Open Roads, Zoomstack railways).
+    Railways, viaducts and bridges © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> (ODbL).</p>
 </aside>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+<script src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
 <script>
-const HEIGHT = ["get", "height_p95_m"];
-const COLOUR = ["interpolate", ["linear"], HEIGHT, 3, "#fff2cc", 5, "#f6c27a", 8, "#e8673c", 12, "#b3122e", 20, "#4a0a45"];
+// Data files sit next to the page; tile URLs must be absolute, so build them from the page URL.
+const BASE = location.href.replace(/[^/]*([?#].*)?$/, "") + "data/";
+const protocol = new pmtiles.Protocol();
+maplibregl.addProtocol("pmtiles", protocol.tile);
+
+const BLD_H = ["coalesce", ["get", "height_p95_m"], ["get", "height_max_m"], 0];
+const BLD_COLOUR = ["interpolate", ["linear"], BLD_H, 3, "#fff2cc", 5, "#f6c27a", 8, "#e8673c", 12, "#b3122e", 20, "#4a0a45"];
+const TREE_H = ["coalesce", ["get", "height_max_m"], 0];
+const TREE_COLOUR = ["interpolate", ["linear"], TREE_H, 4, "#d9f0a3", 10, "#78c679", 15, "#31a354", 20, "#006837", 30, "#00341c"];
 
 const map = new maplibregl.Map({
   container: "map",
   style: "https://tiles.openfreemap.org/styles/positron",
-  center: [-3.531, 50.7235], zoom: 15.3, pitch: 58, bearing: -20, maxPitch: 75,
+  center: [-3.531, 50.7235], zoom: 15.6, pitch: 60, bearing: -20, maxPitch: 80,
+  maxBounds: [[-3.66, 50.66], [-3.40, 50.81]],
 });
 map.addControl(new maplibregl.NavigationControl({visualizePitch: true}), "top-right");
 map.addControl(new maplibregl.ScaleControl(), "bottom-right");
@@ -83,35 +112,76 @@ map.addControl(new maplibregl.ScaleControl(), "bottom-right");
 map.on("load", () => {
   // hide the basemap's own buildings so only the LiDAR ones are drawn
   for (const l of map.getStyle().layers) if (l["source-layer"] === "building") map.setLayoutProperty(l.id, "visibility", "none");
-  map.addSource("fp", {type: "geojson", data: "data/footprints.geojson", generateId: true,
-    attribution: "Buildings derived from Environment Agency LiDAR (OGL v3) and Copernicus Sentinel-2"});
-  map.addLayer({id: "fp-3d", type: "fill-extrusion", source: "fp", paint: {
-    "fill-extrusion-color": COLOUR, "fill-extrusion-height": HEIGHT, "fill-extrusion-opacity": 0.92}});
-  map.addLayer({id: "fp-2d", type: "fill", source: "fp", layout: {visibility: "none"},
-    paint: {"fill-color": COLOUR, "fill-outline-color": "#5b2a1a", "fill-opacity": 0.85}});
+  const dem = {type: "raster-dem", tiles: [BASE + "terrain/{z}/{x}/{y}.png"], tileSize: 256, encoding: "mapbox",
+    minzoom: 10, maxzoom: 15, attribution: "Terrain: Environment Agency LiDAR DTM (OGL v3)"};
+  map.addSource("dem", dem);
+  map.addSource("dem-shade", {...dem});  // a separate source for hillshade, as MapLibre recommends
+  map.setTerrain({source: "dem", exaggeration: 1});
+  map.addLayer({id: "hillshade", type: "hillshade", source: "dem-shade",
+    paint: {"hillshade-exaggeration": 0.35, "hillshade-shadow-color": "#5b6b70"}}, firstSymbolLayer());
+
+  map.addSource("rail", {type: "geojson", data: BASE + "rail.geojson"});
+  map.addLayer({id: "rail", type: "line", source: "rail", paint: {
+    "line-color": ["case", ["get", "on_bridge"], "#7a3e9d", "#4b555a"],
+    "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1, 17, 3],
+    "line-dasharray": [3, 1.5]}});
+
+  map.addSource("trees", {type: "vector", url: "pmtiles://" + BASE + "trees.pmtiles",
+    attribution: "Trees and buildings derived from Environment Agency LiDAR (OGL v3) and Copernicus Sentinel-2"});
+  // a crown floats above its trunk: from a third of the tree's height up to its top
+  map.addLayer({id: "trees", type: "fill-extrusion", source: "trees", "source-layer": "trees", paint: {
+    "fill-extrusion-color": TREE_COLOUR, "fill-extrusion-height": TREE_H,
+    "fill-extrusion-base": ["*", 0.33, TREE_H], "fill-extrusion-opacity": 0.9}});
+
+  map.addSource("buildings", {type: "vector", url: "pmtiles://" + BASE + "buildings.pmtiles"});
+  map.addLayer({id: "buildings", type: "fill-extrusion", source: "buildings", "source-layer": "buildings", paint: {
+    "fill-extrusion-color": BLD_COLOUR, "fill-extrusion-height": BLD_H, "fill-extrusion-opacity": 0.95}});
 });
 
-for (const id of ["fp-3d", "fp-2d"]) {
-  map.on("click", id, (e) => {
-    const p = e.features[0].properties;
-    new maplibregl.Popup({maxWidth: "240px"}).setLngLat(e.lngLat).setHTML(
-      `Highest point <b>${p.height_max_m} m</b><br>Roof (95th pct) <b>${p.height_p95_m} m</b><br>` +
-      `Typical roof (median) <b>${p.height_median_m} m</b><br>Footprint area <b>${Math.round(p.area_m2).toLocaleString()} m²</b>`
-    ).addTo(map);
-  });
+function firstSymbolLayer() {
+  const s = map.getStyle().layers.find(l => l.type === "symbol");
+  return s ? s.id : undefined;
+}
+
+map.on("click", "buildings", (e) => {
+  const p = e.features[0].properties;
+  new maplibregl.Popup({maxWidth: "250px"}).setLngLat(e.lngLat).setHTML(
+    `<b>Building</b><br>Highest point <b>${p.height_max_m} m</b><br>Roof (95th pct) <b>${p.height_p95_m} m</b><br>` +
+    `Typical roof (median) <b>${p.height_median_m} m</b><br>Footprint area <b>${Math.round(p.area_m2).toLocaleString()} m²</b>` +
+    (p.source === "recovered" ? `<br><i>Recovered: found among the tall non-building pixels</i>` : "")
+  ).addTo(map);
+});
+map.on("click", "trees", (e) => {
+  if (map.queryRenderedFeatures(e.point, {layers: ["buildings"]}).length) return;
+  const p = e.features[0].properties;
+  new maplibregl.Popup({maxWidth: "220px"}).setLngLat(e.lngLat).setHTML(
+    `<b>Tree</b><br>Height <b>${p.height_max_m} m</b><br>Crown diameter <b>${p.crown_diameter_m} m</b>`
+  ).addTo(map);
+});
+for (const id of ["buildings", "trees"]) {
   map.on("mouseenter", id, () => map.getCanvas().style.cursor = "pointer");
   map.on("mouseleave", id, () => map.getCanvas().style.cursor = "");
 }
 
+const show = (id, on) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+for (const id of ["buildings", "trees", "hillshade", "rail"])
+  document.getElementById("l-" + id).onchange = (e) => show(id, e.target.checked);
+document.getElementById("l-terrain").onchange = (e) =>
+  map.setTerrain(e.target.checked ? {source: "dem", exaggeration: 1} : null);
+
 function view(is3d) {
-  map.setLayoutProperty("fp-3d", "visibility", is3d ? "visible" : "none");
-  map.setLayoutProperty("fp-2d", "visibility", is3d ? "none" : "visible");
-  map.easeTo({pitch: is3d ? 58 : 0, bearing: is3d ? -20 : 0});
+  map.easeTo({pitch: is3d ? 60 : 0, bearing: is3d ? -20 : 0});
   document.getElementById("v3d").setAttribute("aria-pressed", is3d);
   document.getElementById("v2d").setAttribute("aria-pressed", !is3d);
 }
 document.getElementById("v3d").onclick = () => view(true);
 document.getElementById("v2d").onclick = () => view(false);
+
+fetch(BASE + "stats.json").then(r => r.json()).then(s => {
+  document.getElementById("s-buildings").textContent = s.buildings.toLocaleString();
+  document.getElementById("s-trees").textContent = s.trees.toLocaleString();
+  document.getElementById("s-f1").textContent = s.area_f1.toFixed(3);
+}).catch(() => {});
 
 const panel = document.getElementById("panel"), toggle = document.getElementById("toggle");
 toggle.onclick = () => {

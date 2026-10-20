@@ -1,7 +1,8 @@
 """Evaluate footprint datasets against the OS ground truth.
 
-Datasets: the LiDAR method's output (outputs/footprints/lidar_classified.gpkg)
-and the three free benchmarks (Microsoft, OpenStreetMap, OS Open). Everything
+Datasets: the LiDAR method's output (outputs/footprints/lidar_classified.gpkg),
+the final buildings after 12_canopy_height.py (outputs/canopy/buildings.gpkg) and
+the three free benchmarks (Microsoft, OpenStreetMap, OS Open). Everything
 is computed on vector geometry within the analysis AOI.
 
 Ground truth buildings filtered out by groundtruth.load_ground_truth (excluded
@@ -46,7 +47,10 @@ import config
 from groundtruth import load_ground_truth
 
 EVAL_DIR = config.OUTPUTS / "eval"
-DATASETS = {"lidar": config.OUTPUTS / "footprints" / "lidar_classified.gpkg", **config.BENCHMARKS}
+# lidar: the classifier's footprints (09 + 08); lidar_final: after 12_canopy_height.py
+# (railway viaducts cut out, missed buildings recovered among the tall non-building pixels)
+DATASETS = {"lidar": config.OUTPUTS / "footprints" / "lidar_classified.gpkg",
+            "lidar_final": config.OUTPUTS / "canopy" / "buildings.gpkg", **config.BENCHMARKS}
 
 minx, miny, maxx, maxy = config.ANALYSIS_BOUNDS
 midx, midy = (minx + maxx) / 2, (miny + maxy) / 2

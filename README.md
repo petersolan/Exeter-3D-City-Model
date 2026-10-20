@@ -1,34 +1,33 @@
-# Building footprints and heights from LiDAR: Exeter case study
+# Exeter 3D City Model: buildings, heights and trees from LiDAR
 
-Can open LiDAR elevation data produce building footprints that compete with the
-freely available footprint datasets? This project extracts footprints, each
-with its roof height, for a
-100 km² test area over Exeter, UK (OS grid square **SX99**) from the Environment
-Agency's 1 m DSM and DTM, with Sentinel-2 imagery as a vegetation signal, and
-scores them against Ordnance Survey's detailed building data alongside three
-free alternatives: **Microsoft Global ML Building Footprints**,
-**OpenStreetMap** and **OS Open** buildings.
+*A LiDAR digital twin base layer: 3D buildings, individual trees and terrain for 100 km² of Exeter,
+derived from open data and scored against Ordnance Survey.*
 
-**[Live 3D demo](https://petersolan.github.io/LiDAR-Building-Footprints/)**: all 12,654 footprints extruded by roof height.
+Can open LiDAR elevation data produce a city model good enough to rely on? This project extracts
+building footprints, each with its roof height, tree crowns with their heights and the ground surface
+for a 100 km² test area over Exeter, UK (OS grid square **SX99**) from the Environment Agency's 1 m
+DSM and DTM, with Sentinel-2 imagery as a vegetation signal. The buildings are scored against
+Ordnance Survey's detailed building data alongside three free alternatives: **Microsoft Global ML
+Building Footprints**, **OpenStreetMap** and **OS Open** buildings.
 
-**In short:** on area the LiDAR footprints score highest of the free datasets
-(F1 0.836, against 0.808 for OSM and 0.782 for Microsoft), in every quadrant,
-each scored by a model that never saw it, and 94% of them sit on a real
-building. Their weak point is shape: neighbouring buildings often merge into
-one footprint, so object-level scores trail the other datasets. Unlike the
-free datasets, every footprint also has a height: the maximum is within 2 m of
-OS's for 88% of buildings (median error 0.65 m).
+**[Live 3D viewer](https://petersolan.github.io/Exeter-3D-City-Model/)**: 14,664 buildings
+extruded by roof height, 127,353 tree crowns and the LiDAR terrain.
+
+**In short:** on area the LiDAR buildings score highest of the free datasets (F1 0.844, against
+0.808 for OpenStreetMap and 0.782 for Microsoft), each quadrant scored by a model that never
+saw it, and 93% of footprints sit on a real building. Every building has a
+height (the maximum is within 2 m of OS's for 88% of buildings), and
+every tree over 4 m has a crown with its height. The weak point is shape: neighbouring buildings
+often merge into one footprint, so object-level scores trail the other datasets.
 
 ![LiDAR building footprints over the DSM hillshade, central Exeter](docs/images/footprints.png)
 
 *Central Exeter: the footprints (blue) over a hillshade of the LiDAR surface
-model. Trees show as rough texture in the hillshade and are left out; the
-river Exe is on the left. Only open data is drawn here: the OS ground truth
-used for scoring can't be redistributed.*
+model. Only open data is drawn here: the OS ground truth used for scoring can't be redistributed.*
 
 ## Contents
 
-- [Method](#method)
+- [Method](#method) · [From footprints to a 3D city model](#from-footprints-to-a-3d-city-model)
 - [How it is evaluated](#how-it-is-evaluated)
 - [Results](#results): [headline](#headline), [by quadrant](#by-quadrant),
   [by building type and size](#by-building-type-and-size),
@@ -105,6 +104,55 @@ area F1 0.836 against 0.838, within the uncertainty): the model had already
 learned what these features can tell it, and the scores now show it
 generalises to every quadrant, not just two.
 
+## From footprints to a 3D city model
+
+`12_canopy_height.py` and `13_tree_crowns.py` turn the classified footprints into a city model with
+two layers that never overlap: **buildings** (vectors, with heights) and **vegetation** (a 1 m canopy
+height raster, and tree crowns traced from it).
+
+**Vegetation.** Everything taller than 2.5 m that isn't a building is a candidate, outside every pixel
+a footprint touches and a 1 m ring around the building mask (roof edges would otherwise ring every
+house). Structures are then taken out:
+
+- **Smooth and not green:** pixels with Sentinel-2 NDVI below 0.5 and a 3 × 3 height standard
+  deviation below 1 m: bridge decks, vehicles, flat roofs the classifier missed. Tree canopy is rough
+  (median 2.1 m), bridges are not (median 0.4 m); this rule removes 99% of tall pixels on bridges
+  while green canopy is untouched.
+- **Not green as a whole:** connected patches whose mean NDVI is below 0.4: masts, cranes, chimneys.
+- **Mapped bridges:** every bridge in OpenStreetMap (`prepare_osm_structures.py`), footbridges
+  included, widened by a few metres because mapped lines can sit 3–4 m off the deck.
+- **Height cap:** anything still above 50 m (99.9% of vegetation is below 33 m).
+
+Vegetation covers **14.0%** of the square (median height
+9.1 m), from 10% in the urban SE to
+18% in the rural NW.
+
+**Railway viaducts.** OS open data has railway centrelines but no bridges, so a viaduct at roof height
+merged with the buildings beside it (St Thomas station: one 21,800 m² footprint, 35% of it not
+building). OpenStreetMap tags it as a viaduct; railway viaducts, rail bridges and raised platforms are
+now cut out of the footprints, and the pieces keep their original id and get new heights. That
+footprint became seven buildings, with its area on OS buildings rising from 65% to 88%.
+
+**Recovered buildings.** Some houses never reach the classifier: the first extraction misses them,
+and they end up among the tall non-building pixels (whole terraces in places). Roofs are made of
+planes and foliage is not, so roof-like objects are built from flat pixels (3 × 3 plane-fit residual
+below 0.2 m) and the smooth, not-green pixels, then described by size, flatness, greenness, height,
+road overlap, shape and their distance to and contact with the existing footprints (missed houses
+sit in rows beside found ones). A gradient-boosting model scores each quadrant leave-one-quadrant-out,
+like the main classifier, with a fixed 0.5 threshold. It recovers **4,674 buildings,
+191,000 m², 70% of it on OS buildings**:
+72% in the urban SW, but only 55% in the rural NW, where
+flat objects in fields (bales, polytunnels) look like roofs.
+
+**Tree crowns.** Tree tops are local maxima of the smoothed canopy (at least 4 m tall and 3 m apart);
+each crown grows from its top by a watershed within the vegetation: **127,353 crowns**,
+median height 14.0 m (10th–90th percentile 6.9–24.6 m) and median crown diameter 10.1 m. In dense
+woodland one crown can hold several trees.
+
+**Web viewer** (`11_export_web.py`, `site/`): MapLibre with the LiDAR DTM as 3D terrain and
+hillshade (terrain-RGB tiles), buildings and tree crowns as vector PMTiles (written by GDAL) and
+railways from OpenStreetMap, all static files on GitHub Pages.
+
 ## How it is evaluated
 
 **Ground truth** is the OS National Geographic Database building layer. These
@@ -143,12 +191,15 @@ paired comparison of the LiDAR method against each benchmark.
 
 | Dataset | Area precision | Area recall | **Area F1** (95% interval) | IoU | Object P / R / F1 | Detected (95% interval) | Footprint precision | Detection F1 |
 |---|---|---|---|---|---|---|---|---|
-| **LiDAR** | 0.823 | 0.849 | **0.836** (0.822–0.849) | 0.718 | 0.658 / 0.367 / 0.471 | 89.2% (85.9–91.8) | 94.2% | 91.6% |
+| LiDAR (classifier) | 0.823 | 0.849 | **0.836** (0.822–0.849) | 0.718 | 0.658 / 0.367 / 0.471 | 89.2% (85.9–91.8) | 94.2% | 91.6% |
+| **LiDAR final** | 0.821 | 0.868 | **0.844** (0.830–0.856) | 0.729 | 0.621 / 0.397 / 0.484 | 92.0% (88.7–94.5) | 92.5% | 92.2% |
 | OpenStreetMap | 0.825 | 0.791 | 0.808 (0.788–0.824) | 0.677 | 0.668 / 0.658 / 0.663 | 90.2% (88.2–91.7) | 94.7% | 92.4% |
 | Microsoft | 0.767 | 0.798 | 0.782 (0.765–0.797) | 0.642 | 0.698 / 0.653 / 0.675 | 92.2% (88.9–94.8) | 92.5% | 92.4% |
 | OS Open | 0.891 | 0.926 | 0.908 (0.899–0.917) | 0.832 | 0.830 / 0.700 / 0.759 | 98.4% (97.8–98.9) | 97.2% | 97.8% |
 
-**Is the difference real?** Paired bootstrap of area F1, LiDAR minus benchmark:
+**LiDAR final** is the city model's building layer: the classifier's footprints with railway viaducts cut out and missed buildings recovered (see [From footprints to a 3D city model](#from-footprints-to-a-3d-city-model)). Recovery improves area F1 from 0.836 to 0.844: recall 0.849 → 0.868, precision 0.823 → 0.821.
+
+**Is the difference real?** (classifier footprints) Paired bootstrap of area F1, LiDAR minus benchmark:
 
 | Against | F1 difference (95% interval) | Resamples in which LiDAR scores higher |
 |---|---|---|
@@ -367,6 +418,8 @@ a 1 m grid catches only part of them.
 - **Ground truth is a snapshot.** Some "false" detections are new buildings
   that OS hasn't mapped yet, so every dataset's false area is slightly
   overstated.
+- **Recovered buildings are less certain.** 70% of the recovered area is on OS buildings overall, 55% in the rural NW; they are marked `source = recovered` so they can be filtered out. Recovered outlines are traced pixel by pixel.
+- **Bridges missing from OpenStreetMap** are only caught by the smooth and not-green rules.
 - **One area.** Results are for one 100 km² square around Exeter; other
   landscapes (uplands, dense city centres) may behave differently. The saved
   all-quadrant model is the starting point for testing that.
@@ -377,7 +430,7 @@ All under `outputs/`:
 
 | File | Contents |
 |---|---|
-| `footprints/lidar_classified.gpkg` | **The final footprints** (12,654), squared, with area, corner count, orientation source and heights (median, 95th percentile, maximum) |
+| `footprints/lidar_classified.gpkg` | The classifier's footprints (12,654), squared, with area, corner count, orientation source and heights (median, 95th percentile, maximum) |
 | `footprints/lidar_classified_mask.tif` | The kept building pixels (1 m) before tracing |
 | `diagnostics/candidates.parquet` | Every candidate with its 18 features, label, probability and the bridge rule's measures |
 | `diagnostics/lidar_objects.gpkg` | Final footprints with height, roughness, NDVI and shape statistics and a label against OS (`05_diagnose_objects.py`) |
@@ -391,6 +444,11 @@ All under `outputs/`:
 | `eval/classifier_*.csv`, `eval/classifier_settings.json` | The classifier report (see [Classifier](#classifier)), with each fold's threshold and bridge rule |
 | `models/building_classifier.joblib` | The classifier trained on all four quadrants, with its threshold and bridge rule, for other areas |
 | `eval/shape_samples.csv`, `footprints/regularise_samples.gpkg` | Outline shape statistics and the sample tiles' footprints |
+| `canopy/buildings.gpkg` | **The city model's buildings** with heights and `source` (`classified`, `cut_by_rail`, `recovered`) |
+| `canopy/vegetation_height.tif` (+ `.qml` style) | Canopy height (m) on vegetation pixels, no data elsewhere: click a pixel in QGIS |
+| `canopy/tree_crowns.gpkg` | Tree crowns with height and crown diameter |
+| `canopy/removed.tif` | Tall pixels taken out of vegetation: 1 smooth, 2 not green, 3 above 50 m, 4 mapped bridge |
+| `eval/canopy_summary.csv`, `eval/recovery.csv` | Vegetation per quadrant; recovered buildings per quadrant with precision |
 | `eval/heights.csv`, `eval/heights_pairs.csv` | Height errors against OS overall, per quadrant and class; every matched pair |
 
 ## Repository layout
@@ -412,13 +470,16 @@ scripts/
                             no argument for the four sample tiles)
   09_object_classifier.py   building / not-building classifier, bridge rule, classifier report
   10_building_heights.py    heights per footprint, checked against OS heights
-  11_export_web.py          footprints + heights as WGS84 GeoJSON for the demo site
+  11_export_web.py          buildings, trees, railways (PMTiles / GeoJSON) and terrain tiles for the viewer
+  12_canopy_height.py       vegetation height raster, structure removal, viaduct cut, recovered buildings
+  13_tree_crowns.py         individual tree crowns from the canopy height model
+  prepare_osm_structures.py bridges, viaducts, railways and platforms from OpenStreetMap
   prepare_rail.py           railway lines from OS Open Zoomstack (bridge rule)
   explain_building.py       which extraction step loses given OS buildings
   build_check_project.py    QGIS project for checking the results (run with QGIS's Python)
   render_readme_images.py   the README images (QGIS's Python; open data only)
   tune_extraction.py        parallel grid search of the extraction parameters
-site/                       3D web demo (MapLibre), deployed to GitHub Pages
+site/                       3D city model viewer (MapLibre + PMTiles), deployed to GitHub Pages
 environment.yml             conda environment (conda-forge)
 ```
 
@@ -438,7 +499,11 @@ python 08_regularise_footprints.py   # optional: outline shape on the sample til
 python 04_evaluate.py
 python 06_false_positives.py
 python 10_building_heights.py        # heights per footprint, checked against OS
-python 11_export_web.py              # site/data/footprints.geojson for the demo
+python prepare_osm_structures.py     # OpenStreetMap bridges, viaducts and railways
+python 12_canopy_height.py           # vegetation, structures, viaducts, recovered buildings
+python 13_tree_crowns.py             # tree crowns
+python 04_evaluate.py                # again, to score the final buildings (lidar_final)
+python 11_export_web.py              # the viewer's data in site/data
 python 05_diagnose_objects.py        # optional: per-footprint statistics
 # optional, with QGIS's Python: a styled QGIS project of all results
 # "C:\Program Files\QGIS 3.44.13\bin\python-qgis-ltr.bat" build_check_project.py
@@ -470,6 +535,7 @@ The input data is not included in this repository. Expected layout under `data/`
 | `footprints/osm_buildings.parquet` | OpenStreetMap | ODbL |
 | `footprints/os_buildings.parquet` | OS Open building data | OGL v3 |
 | `roads/SX_RoadLink.shp` | OS Open Roads, road links: bridge rule (and `use_roads`) | OGL v3 |
+| `osm/structures.gpkg` | OpenStreetMap bridges, viaducts, railways and platforms, from `prepare_osm_structures.py` (Overpass API) | ODbL |
 | `roads/zoomstack_rail.gpkg` | OS Open Zoomstack railway lines, cut by `prepare_rail.py` | OGL v3 |
 
 Sentinel-2 L2A is downloaded by `07_sentinel2_ndvi.py` from
@@ -493,7 +559,8 @@ The README images and any outputs derived from this project contain:
 - Modified Copernicus Sentinel data 2022.
 - Microsoft Global ML Building Footprints and OpenStreetMap data
   (© OpenStreetMap contributors), under the Open Database License (ODbL),
-  used for comparison only.
+  used for comparison only; OpenStreetMap railways, viaducts and bridges are also used to
+  remove bridges from the vegetation and viaducts from the buildings.
 
 The OS National Geographic Database ground truth is used for scoring only; it
 is not redistributed, and no image in this repository shows it.
