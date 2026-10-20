@@ -13,6 +13,8 @@ Building Footprints**, **OpenStreetMap** and **OS Open** buildings.
 **[Live 3D viewer](https://petersolan.github.io/Exeter-3D-City-Model/)**: 12,651 buildings
 extruded by roof height, 127,615 tree crowns and the LiDAR terrain.
 
+[![The live 3D viewer: buildings coloured by roof height and tree crowns over central Exeter](docs/images/viewer_3d.jpg)](https://petersolan.github.io/Exeter-3D-City-Model/)
+
 **In short:** on area the LiDAR buildings score highest of the free datasets (F1 0.836, against
 0.808 for OpenStreetMap and 0.782 for Microsoft), each quadrant scored by a model that never
 saw it, and 94% of footprints sit on a real building. Every building has a
@@ -20,10 +22,10 @@ height (the maximum is within 2 m of OS's for 88% of buildings), and
 every tree over 4 m has a crown with its height. The weak point is shape: neighbouring buildings
 often merge into one footprint, so object-level scores trail the other datasets.
 
-![LiDAR building footprints over the DSM hillshade, central Exeter](docs/images/footprints.png)
+![Buildings and tree crowns from LiDAR over the DSM hillshade, central Exeter](docs/images/footprints.png)
 
-*Central Exeter: the footprints (blue) over a hillshade of the LiDAR surface
-model. Only open data is drawn here: the OS ground truth used for scoring can't be redistributed.*
+*Central Exeter: buildings (blue) and tree crowns (green, darker is taller) over a hillshade of the
+LiDAR surface model, with the river Exe on the left. Only open data is drawn here: the OS ground truth used for scoring can't be redistributed.*
 
 ## Contents
 
