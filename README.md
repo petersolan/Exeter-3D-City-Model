@@ -10,8 +10,8 @@ DSM and DTM, with Sentinel-2 imagery as a vegetation signal. The buildings are s
 Ordnance Survey's detailed building data alongside three free alternatives: **Microsoft Global ML
 Building Footprints**, **OpenStreetMap** and **OS Open** buildings.
 
-**[Live 3D viewer](https://petersolan.github.io/Exeter-3D-City-Model/)**: 14,664 buildings
-extruded by roof height, 127,353 tree crowns and the LiDAR terrain.
+**[Live 3D viewer](https://petersolan.github.io/Exeter-3D-City-Model/)**: 14,536 buildings
+extruded by roof height, 127,278 tree crowns and the LiDAR terrain.
 
 **In short:** on area the LiDAR buildings score highest of the free datasets (F1 0.844, against
 0.808 for OpenStreetMap and 0.782 for Microsoft), each quadrant scored by a model that never
@@ -139,13 +139,14 @@ planes and foliage is not, so roof-like objects are built from flat pixels (3 ×
 below 0.2 m) and the smooth, not-green pixels, then described by size, flatness, greenness, height,
 road overlap, shape and their distance to and contact with the existing footprints (missed houses
 sit in rows beside found ones). A gradient-boosting model scores each quadrant leave-one-quadrant-out,
-like the main classifier, with a fixed 0.5 threshold. It recovers **4,674 buildings,
-191,000 m², 70% of it on OS buildings**:
-72% in the urban SW, but only 55% in the rural NW, where
-flat objects in fields (bales, polytunnels) look like roofs.
+like the main classifier, with a fixed 0.5 threshold. It keeps **4,674 roof objects,
+191,000 m² of pixels, 70% of it on OS buildings**: 72% in the urban SW, but only 55% in the rural NW,
+where flat objects in fields (bales, polytunnels) look like roofs. The kept pixels are then traced,
+simplified and squared like every other footprint (step 08) and cut back wherever they would overlap
+an existing one: **1,876 recovered buildings**, about 147,000 m².
 
 **Tree crowns.** Tree tops are local maxima of the smoothed canopy (at least 4 m tall and 3 m apart);
-each crown grows from its top by a watershed within the vegetation: **127,353 crowns**,
+each crown grows from its top by a watershed within the vegetation: **127,278 crowns**,
 median height 14.0 m (10th–90th percentile 6.9–24.6 m) and median crown diameter 10.1 m. In dense
 woodland one crown can hold several trees.
 
@@ -418,7 +419,7 @@ a 1 m grid catches only part of them.
 - **Ground truth is a snapshot.** Some "false" detections are new buildings
   that OS hasn't mapped yet, so every dataset's false area is slightly
   overstated.
-- **Recovered buildings are less certain.** 70% of the recovered area is on OS buildings overall, 55% in the rural NW; they are marked `source = recovered` so they can be filtered out. Recovered outlines are traced pixel by pixel.
+- **Recovered buildings are less certain.** 70% of the recovered area is on OS buildings overall, 55% in the rural NW; they are marked `source = recovered` so they can be filtered out.
 - **Bridges missing from OpenStreetMap** are only caught by the smooth and not-green rules.
 - **One area.** Results are for one 100 km² square around Exeter; other
   landscapes (uplands, dense city centres) may behave differently. The saved

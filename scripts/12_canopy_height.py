@@ -33,8 +33,9 @@ footprints (missed houses sit in rows beside found ones). A gradient-boosting mo
 leave-one-quadrant-out like 09, scores each quadrant with a model that never saw it;
 objects with probability >= RECOVER_THRESHOLD (fixed, not tuned) are kept. Labels:
 OS ground truth, as in 09. Kept cores grow RECOVER_GROW_PX pixel into
-neighbouring tall pixels (eaves, roof edges), are traced to polygons with heights
-(source = "recovered") and leave the vegetation layer.
+neighbouring tall pixels (eaves, roof edges), are regularised like every other
+footprint (08: traced, simplified, squared, overlaps with existing footprints cut
+away), get heights (source = "recovered") and leave the vegetation layer.
 
 Writes to outputs/canopy/:
   buildings.gpkg          building footprints (vector) with height columns; source is
@@ -62,7 +63,7 @@ import pandas as pd
 import rasterio
 import shapely
 from matplotlib.colors import ListedColormap
-from rasterio.features import rasterize, shapes
+from rasterio.features import rasterize
 from scipy import ndimage
 from skimage import measure
 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -296,14 +297,27 @@ def recover_buildings(height, candidates, structure_px, ndvi, road, built, trans
     return mask, f, scored_px, ignored_px
 
 
-def recovered_polygons(mask, transform, crs):
-    """Trace recovered pixels to polygons; drop pieces under MIN_BUILDING_M2."""
-    polys = [shapely.geometry.shape(g) for g, v in shapes(mask.astype("uint8"), mask=mask, transform=transform)
-             if v == 1]
-    gdf = gpd.GeoDataFrame(geometry=polys, crs=crs)
+def recovered_polygons(mask, transform, crs, existing):
+    """Recovered pixels -> footprints, regularised like every other footprint (08: trace between pixel
+    centres, simplify, square up). Squared outlines may reach a little past their pixels, so overlap
+    with the existing footprints is cut away; pieces under MIN_BUILDING_M2 are dropped."""
+    reg = importlib.import_module("08_regularise_footprints")
+    gdf, _ = reg.process(mask, transform, crs, reg.PARAMS)
+    near = existing[existing.intersects(shapely.box(*gdf.total_bounds))] if len(gdf) else existing.iloc[:0]
+    tree = shapely.STRtree(near.geometry.values)
+
+    def clear(g):
+        hits = tree.query(g, predicate="intersects")
+        if len(hits):
+            g = g.difference(shapely.union_all(near.geometry.values[hits]))
+        parts = [p for p in shapely.get_parts(g) if p.geom_type == "Polygon"]
+        return max(parts, key=lambda p: p.area) if parts else None
+
+    gdf["geometry"] = [clear(g) for g in gdf.geometry]
+    gdf = gdf[gdf.geometry.notna()]
     gdf = gdf[gdf.area >= config.MIN_BUILDING_M2].reset_index(drop=True)
     gdf["area_m2"] = gdf.area.round(1)
-    gdf["vertices"] = shapely.get_num_coordinates(gdf.geometry.values)
+    gdf["vertices"] = shapely.get_num_coordinates(gdf.geometry.values) - 1
     heights = importlib.import_module("10_building_heights").footprint_heights(gdf)
     gdf[heights.columns] = heights
     return gdf
@@ -489,9 +503,9 @@ def main() -> None:
     print("recovered buildings:\n" + report.to_string(index=False))
 
     footprints["source"] = np.where(footprints["cut_by_rail"], "cut_by_rail", "classified")
-    new = recovered_polygons(recovered, transform, footprints.crs)
+    new = recovered_polygons(recovered, transform, footprints.crs, footprints)
     new["building_id"] = np.arange(len(new)) + int(footprints["building_id"].max()) + 1
-    new["cut_by_rail"], new["source"], new["orientation"] = False, "recovered", "traced"
+    new["cut_by_rail"], new["source"] = False, "recovered"
     footprints = gpd.GeoDataFrame(pd.concat([footprints, new], ignore_index=True), crs=footprints.crs)
 
     # the recovered buildings leave vegetation and the removed codes
