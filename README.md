@@ -197,12 +197,12 @@ paired comparison of the LiDAR method against each benchmark.
 | Dataset | Area precision | Area recall | **Area F1** (95% interval) | IoU | Object P / R / F1 | Detected (95% interval) | Footprint precision | Detection F1 |
 |---|---|---|---|---|---|---|---|---|
 | LiDAR (classifier) | 0.823 | 0.849 | **0.836** (0.822–0.849) | 0.718 | 0.658 / 0.367 / 0.471 | 89.2% (85.9–91.8) | 94.2% | 91.6% |
-| **LiDAR final** | … | … | being re-scored | … | … | … | … | … |
+| **LiDAR final** | 0.824 | 0.849 | **0.836** (0.822–0.849) | 0.719 | 0.659 / 0.367 / 0.472 | 89.2% (85.9–91.8) | 94.3% | 91.6% |
 | OpenStreetMap | 0.825 | 0.791 | 0.808 (0.788–0.824) | 0.677 | 0.668 / 0.658 / 0.663 | 90.2% (88.2–91.7) | 94.7% | 92.4% |
 | Microsoft | 0.767 | 0.798 | 0.782 (0.765–0.797) | 0.642 | 0.698 / 0.653 / 0.675 | 92.2% (88.9–94.8) | 92.5% | 92.4% |
 | OS Open | 0.891 | 0.926 | 0.908 (0.899–0.917) | 0.832 | 0.830 / 0.700 / 0.759 | 98.4% (97.8–98.9) | 97.2% | 97.8% |
 
-**LiDAR final** is the city model's building layer: the classifier's footprints with footprints that are mostly a mapped bridge deleted and railway viaducts cut out (see [From footprints to a 3D city model](#from-footprints-to-a-3d-city-model)). Its scores are being recomputed; the change is small (9 bridges deleted, one footprint cut).
+**LiDAR final** is the city model's building layer: the classifier's footprints with footprints that are mostly a mapped bridge deleted and railway viaducts cut out (see [From footprints to a 3D city model](#from-footprints-to-a-3d-city-model)). Area F1 is unchanged at 0.836 and precision rises slightly (0.823 → 0.824): the 9 deleted bridges were false area, and recall is the same (0.849).
 
 **Is the difference real?** (classifier footprints) Paired bootstrap of area F1, LiDAR minus benchmark:
 
