@@ -3,7 +3,8 @@
 Writes to site/data/:
   buildings.pmtiles   final buildings (12_canopy_height.py): footprints with heights and
                       source; outlines simplified by 0.5 m in British National Grid
-  trees.pmtiles       tree crowns with heights (13_tree_crowns.py), simplified by 0.5 m
+  trees.pmtiles       tree crowns with heights and single-pixel holes closed (13_tree_crowns.py),
+                      simplified by 0.5 m
   rail.geojson        railway lines, with viaducts and bridges flagged (OpenStreetMap,
                       prepare_osm_structures.py)
   terrain/{z}/{x}/{y}.png   the LiDAR DTM as terrain-RGB tiles (Mapbox encoding,
@@ -33,7 +34,7 @@ import config
 SITE = config.ROOT / "site" / "data"
 CANOPY = config.OUTPUTS / "canopy"
 BUILDINGS = CANOPY / "buildings.gpkg"
-TREES = CANOPY / "tree_crowns.gpkg"
+TREES = CANOPY / "tree_crowns_filled.gpkg"  # single-pixel holes closed (13_tree_crowns.py)
 RAIL = config.DATA / "osm" / "structures.gpkg"
 TERRAIN_RES_M = 5.0
 TERRAIN_ZOOMS = "10-15"
@@ -104,8 +105,11 @@ def main() -> None:
 
     terrain_tiles(SITE / "terrain")
 
-    summary = pd.read_csv(config.OUTPUTS / "eval" / "summary.csv").set_index("dataset")
-    final = summary.loc["lidar_final"] if "lidar_final" in summary.index else summary.loc["lidar"]
+    summary_path = config.OUTPUTS / "eval" / "summary.csv"
+    summary = pd.read_csv(summary_path).set_index("dataset")
+    # the final buildings' score only if it was evaluated after they were last written
+    current = summary_path.stat().st_mtime > BUILDINGS.stat().st_mtime
+    final = summary.loc["lidar_final"] if current and "lidar_final" in summary.index else summary.loc["lidar"]
     heights = pd.read_csv(config.OUTPUTS / "eval" / "heights.csv")
     stats = {"buildings": int(len(b)), "trees": int(len(t)), "area_f1": round(float(final["f1"]), 3),
              "height_within_2m_pct": round(float(heights.iloc[0].filter(like="within_2").iloc[0]), 0)}

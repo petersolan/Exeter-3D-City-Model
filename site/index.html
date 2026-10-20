@@ -147,8 +147,7 @@ map.on("click", "buildings", (e) => {
   const p = e.features[0].properties;
   new maplibregl.Popup({maxWidth: "250px"}).setLngLat(e.lngLat).setHTML(
     `<b>Building</b><br>Highest point <b>${p.height_max_m} m</b><br>Roof (95th pct) <b>${p.height_p95_m} m</b><br>` +
-    `Typical roof (median) <b>${p.height_median_m} m</b><br>Footprint area <b>${Math.round(p.area_m2).toLocaleString()} m²</b>` +
-    (p.source === "recovered" ? `<br><i>Recovered: found among the tall non-building pixels</i>` : "")
+    `Typical roof (median) <b>${p.height_median_m} m</b><br>Footprint area <b>${Math.round(p.area_m2).toLocaleString()} m²</b>`
   ).addTo(map);
 });
 map.on("click", "trees", (e) => {

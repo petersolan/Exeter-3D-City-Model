@@ -9,7 +9,15 @@ a crown is kept by the tile whose core holds its top, so none is cut or doubled.
 
 Writes outputs/canopy/tree_crowns.gpkg: one polygon per crown with its top
 (height_max_m), 95th percentile height, area and an equivalent crown diameter.
+Also outputs/canopy/tree_crowns_filled.gpkg: the same crowns with holes smaller than
+FILL_HOLES_M2 closed (single non-vegetation pixels inside a crown, 1 m2 each); the
+outline is kept, unlike a convex hull, which would swallow the gaps between crowns.
+
+    python 13_tree_crowns.py              # segment crowns, then write both files
+    python 13_tree_crowns.py --fill-only  # only remake the filled file from tree_crowns.gpkg
 """
+
+import argparse
 
 import geopandas as gpd
 import numpy as np
@@ -26,6 +34,8 @@ import config
 
 SRC = config.OUTPUTS / "canopy" / "vegetation_height.tif"
 OUT = config.OUTPUTS / "canopy" / "tree_crowns.gpkg"
+OUT_FILLED = config.OUTPUTS / "canopy" / "tree_crowns_filled.gpkg"
+FILL_HOLES_M2 = 1.02  # a 1 m pixel is a 1 m2 hole; the margin allows for float error
 SMOOTH_SIGMA_PX = 1.0
 TOP_MIN_HEIGHT_M = 4.0
 TOP_MIN_DISTANCE_M = 3
@@ -67,7 +77,33 @@ def crowns_in_window(chm, transform, core):
     return out
 
 
+def fill_small_holes(geom, max_area):
+    """The polygon with every interior ring smaller than max_area removed."""
+    if geom.geom_type == "MultiPolygon":
+        return shapely.MultiPolygon([fill_small_holes(g, max_area) for g in geom.geoms])
+    keep = [r for r in geom.interiors if shapely.Polygon(r).area >= max_area]
+    return shapely.Polygon(geom.exterior, keep)
+
+
+def write_filled(src=OUT, out=OUT_FILLED):
+    gdf = gpd.read_file(src)
+    holes_before = sum(len(g.interiors) for g in gdf.geometry if g.geom_type == "Polygon")
+    gdf["geometry"] = [fill_small_holes(g, FILL_HOLES_M2) for g in gdf.geometry]
+    holes_after = sum(len(g.interiors) for g in gdf.geometry if g.geom_type == "Polygon")
+    gdf["area_m2"] = gdf.area.round(1)
+    gdf["crown_diameter_m"] = (2 * np.sqrt(gdf["area_m2"] / np.pi)).round(1)
+    out.unlink(missing_ok=True)
+    gdf.to_file(out, layer="tree_crowns_filled", driver="GPKG")
+    print(f"holes under {FILL_HOLES_M2} m2 closed: {holes_before - holes_after:,} of {holes_before:,} "
+          f"({holes_after:,} larger holes kept) -> {out}")
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--fill-only", action="store_true", help="only remake tree_crowns_filled.gpkg")
+    if parser.parse_args().fill_only:
+        write_filled()
+        return
     crowns = []
     with rasterio.open(SRC) as src:
         nodata = src.nodata
@@ -93,6 +129,7 @@ def main() -> None:
     q = gdf["height_max_m"].quantile([0.1, 0.5, 0.9]).round(1).tolist()
     print(f"{len(gdf):,} crowns; height p10/p50/p90 {q} m; crown diameter median "
           f"{gdf['crown_diameter_m'].median():.1f} m -> {OUT}")
+    write_filled()
 
 
 if __name__ == "__main__":
