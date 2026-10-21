@@ -9,6 +9,12 @@ Writes to site/data/:
                       prepare_osm_structures.py)
   population/{z}/{x}/{y}.png   Census 2021 residents per 5 m cell (14_population_raster.py),
                       coloured in POP_CLASSES (Blues), transparent where nobody lives
+  roads.geojson       OS Open Roads network (15_road_network.py), for drawing and for the
+                      route tool: c class, n name, a / b junction ids, l length (m), v car
+                      speed (km/h, 0 = no cars), f walking and cycling allowed, r routable
+  population_cells.json   residents per 5 m cell as flat [lon, lat, residents, ...] for the
+                      people-count tool, cell centres
+  aoi.geojson         the AOI square (route ends and drawings must fall inside it)
   terrain/{z}/{x}/{y}.png   the LiDAR DTM as terrain-RGB tiles (Mapbox encoding,
                       0.1 m steps) at TERRAIN_RES_M, for MapLibre's 3D terrain and hillshade
   stats.json          headline numbers shown on the page
@@ -28,6 +34,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
+import shapely
 from rasterio.enums import Resampling
 from rasterio.warp import calculate_default_transform, reproject
 
@@ -41,6 +48,7 @@ RAIL = config.DATA / "osm" / "structures.gpkg"
 TERRAIN_RES_M = 5.0
 TERRAIN_ZOOMS = "10-15"
 SIMPLIFY_M = 0.5
+ROADS = config.OUTPUTS / "roads" / "road_network.gpkg"
 POPULATION = config.OUTPUTS / "population" / "population_5m.tif"
 POP_ZOOMS = "11-16"
 # (lowest residents in the class, colour): ColorBrewer Blues; the page's legend uses the same
@@ -96,6 +104,34 @@ def population_tiles(out_dir):
     return int(pop.sum())
 
 
+def roads_geojson(out):
+    r = gpd.read_file(ROADS).to_crs("EPSG:4326")
+    label = r["name"].where(r["name"] != "", r["number"])
+    g = gpd.GeoDataFrame({"c": r["road_class"], "n": label, "a": r["from_node"], "b": r["to_node"],
+                          "l": r["length_m"], "v": r["car_kmh"], "f": r["walk"], "r": r["main_network"]},
+                         geometry=r.geometry, crs=r.crs)
+    out.unlink(missing_ok=True)
+    g.to_file(out, driver="GeoJSON", layer_options={"COORDINATE_PRECISION": 6, "RFC7946": "YES"})
+    print(f"{len(g):,} road links ({g['l'].sum() / 1000:,.0f} km) -> {out.name} ({out.stat().st_size / 1e6:.1f} MB)")
+
+
+def population_cells(out):
+    """Centres of populated 5 m cells in WGS84 with their residents, flattened."""
+    with rasterio.open(POPULATION) as src:
+        pop, transform, crs = src.read(1), src.transform, src.crs
+    rows, cols = np.nonzero(pop)
+    xs, ys = rasterio.transform.xy(transform, rows, cols)  # cell centres
+    pts = gpd.GeoSeries(gpd.points_from_xy(xs, ys), crs=crs).to_crs("EPSG:4326")
+    flat = [v for x, y, n in zip(pts.x.round(6), pts.y.round(6), pop[rows, cols].tolist()) for v in (x, y, n)]
+    out.write_text(json.dumps(flat, separators=(",", ":")), encoding="utf-8")
+    print(f"{len(rows):,} populated cells -> {out.name} ({out.stat().st_size / 1e6:.1f} MB)")
+
+
+def aoi_geojson(out):
+    aoi = gpd.GeoSeries([shapely.box(*config.ANALYSIS_BOUNDS).segmentize(500)], crs=config.CRS)
+    out.write_text(aoi.to_crs("EPSG:4326").to_json(), encoding="utf-8")
+
+
 def terrain_tiles(out_dir):
     """DTM -> Web Mercator at TERRAIN_RES_M -> terrain-RGB GeoTIFF -> XYZ PNG tiles."""
     with rasterio.open(config.DTM_PATH) as src:
@@ -135,6 +171,9 @@ def main() -> None:
     rail.to_crs("EPSG:4326").to_file(SITE / "rail.geojson", driver="GeoJSON",
                                      layer_options={"COORDINATE_PRECISION": 6, "RFC7946": "YES"})
 
+    roads_geojson(SITE / "roads.geojson")
+    population_cells(SITE / "population_cells.json")
+    aoi_geojson(SITE / "aoi.geojson")
     terrain_tiles(SITE / "terrain")
     residents = population_tiles(SITE / "population")
 

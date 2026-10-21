@@ -163,9 +163,28 @@ Census 2021 counts on address points (ONS UPRN Directory); each cell holds the r
 address points inside it, so a house is one cell and the gardens and roads around it are empty.
 The total matches that project's own 10 m raster over the same square.
 
+**Roads** (`15_road_network.py`): OS Open Roads for the area plus a 1 km margin (7,197 links,
+789 km), which records each link's start and end junction and so is a routing graph as it is.
+Each link has a class, its length and the modes allowed on it: no walking or cycling on the
+motorway; no driving on restricted access roads (private, gated) or shared-use carriageways
+(pedestrianised streets such as parts of High Street). Driving speeds are typical free-flow
+speeds by road type (30 km/h local roads, 48 km/h A roads, 80 km/h dual-carriageway A roads, 100 km/h
+motorway); walking is 4.8 km/h and cycling 15 km/h.
+
+**Viewer tools**, all in the browser on static files:
+
+- *Count people*: draw an area or a circle; residents are summed over the 5 m population cells
+  whose centre falls inside it (checked against the same count in British National Grid with
+  GeoPandas: within 1%).
+- *Route*: click two points in the area. Each is snapped to the nearest point on a road the mode
+  may use, and Dijkstra's algorithm finds the quickest path over the junction graph for driving,
+  cycling and walking, giving distance and time. It is an estimate: OS Open Roads has no one-way
+  streets, turn bans or traffic, and no footpaths, so walking and cycling follow roads.
+
 **Web viewer** (`11_export_web.py`, `site/`): MapLibre with the LiDAR DTM as 3D terrain and
 hillshade (terrain-RGB tiles), buildings and tree crowns as vector PMTiles (written by GDAL),
-railways from OpenStreetMap and residents per 5 m cell as Blues raster tiles (off by default), all static files on GitHub Pages.
+railways from OpenStreetMap, OS Open Roads by class, residents per 5 m cell as Blues raster tiles
+(off by default) and the two tools above, all static files on GitHub Pages.
 
 ## How it is evaluated
 
@@ -467,6 +486,7 @@ All under `outputs/`:
 | `canopy/removed.tif` | Tall pixels taken out of vegetation: 1 smooth, 2 not green, 3 above 50 m, 4 mapped bridge, 5 mapped pylon or mast |
 | `canopy/removed_towers.gpkg` | Crowns dropped as mapped pylons and masts, with spikiness and distance to the tower |
 | `population/population_5m.tif` | Census 2021 residents per 5 m cell (UInt16, 0 = none), Cloud Optimized GeoTIFF |
+| `roads/road_network.gpkg` | The road graph: links with junction ids, class, length, car speed, allowed modes and `main_network` |
 | `eval/canopy_summary.csv` | Vegetation per quadrant |
 | `eval/heights.csv`, `eval/heights_pairs.csv` | Height errors against OS overall, per quadrant and class; every matched pair |
 
@@ -489,12 +509,13 @@ scripts/
                             no argument for the four sample tiles)
   09_object_classifier.py   building / not-building classifier, bridge rule, classifier report
   10_building_heights.py    heights per footprint, checked against OS heights
-  11_export_web.py          buildings, trees, railways (PMTiles / GeoJSON), terrain and population tiles
+  11_export_web.py          buildings, trees, railways, roads (PMTiles / GeoJSON), terrain and population tiles
                             for the viewer
   12_canopy_height.py       vegetation height raster, structure removal, bridge deletion and viaduct cut
   13_tree_crowns.py         tree crowns from the canopy height model (mapped pylons dropped), and a
                             hole-filled copy
   14_population_raster.py   Census 2021 residents per 5 m cell from the census project's address points
+  15_road_network.py        road graph for the route tool from OS Open Roads
   prepare_osm_structures.py bridges, viaducts, railways, platforms, pylons and masts from OpenStreetMap
   prepare_rail.py           railway lines from OS Open Zoomstack (bridge rule)
   explain_building.py       which extraction step loses given OS buildings
@@ -526,6 +547,7 @@ python 12_canopy_height.py           # vegetation, structures, bridges and viadu
 python 13_tree_crowns.py             # tree crowns
 python 04_evaluate.py                # again, to score the final buildings (lidar_final)
 python 14_population_raster.py       # residents per 5 m cell (needs the census project's outputs)
+python 15_road_network.py            # road graph for the viewer's route tool
 python 11_export_web.py              # the viewer's data in site/data
 python 05_diagnose_objects.py        # optional: per-footprint statistics
 # optional, with QGIS's Python: a styled QGIS project of all results
@@ -557,7 +579,7 @@ The input data is not included in this repository. Expected layout under `data/`
 | `footprints/microsoft_buildings.parquet` | [Microsoft Global ML Building Footprints](https://github.com/microsoft/GlobalMLBuildingFootprints) | ODbL |
 | `footprints/osm_buildings.parquet` | OpenStreetMap | ODbL |
 | `footprints/os_buildings.parquet` | OS Open building data | OGL v3 |
-| `roads/SX_RoadLink.shp` | OS Open Roads, road links: bridge rule (and `use_roads`) | OGL v3 |
+| `roads/SX_RoadLink.shp` | OS Open Roads, road links: bridge rule (and `use_roads`), and the road network for the viewer | OGL v3 |
 | `osm/structures.gpkg` | OpenStreetMap bridges, viaducts, railways, platforms, power towers, masts and power lines, from `prepare_osm_structures.py` (Overpass API) | ODbL |
 | `../Census-distribution/data/processed/location_population_points.parquet` | Census 2021 residents on address points, from [GB Census Population Map](https://github.com/petersolan/GB-Census-Population-Map) (`--points` to point elsewhere) | OGL v3 |
 | `roads/zoomstack_rail.gpkg` | OS Open Zoomstack railway lines, cut by `prepare_rail.py` | OGL v3 |

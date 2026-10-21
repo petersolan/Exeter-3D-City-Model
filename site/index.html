@@ -40,6 +40,29 @@ h1{font-size:19px;line-height:1.25;margin:0 0 2px}
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:12px}
 .stats div{background:var(--bg);border-radius:6px;padding:6px 8px}
 .stats b{display:block;font:600 16px/1.2 var(--mono)} .stats span{font-size:11.5px;color:var(--muted)}
+.roadkey{display:grid;grid-template-columns:repeat(4,auto);gap:4px 10px;font-size:12.5px;color:var(--ink2)}
+.roadkey span{display:flex;align-items:center;gap:5px}
+.roadkey i{display:inline-block;width:18px;border-top-style:solid}
+.tool{margin-top:8px;font-size:13.5px}
+.tool[hidden]{display:none}
+.seg.small button{font-size:12.5px;padding:5px 4px}
+.hint{color:var(--muted);font-size:13px;margin:6px 0}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap}
+.row[hidden]{display:none}
+.row input{width:76px;font:500 13px var(--mono);padding:3px 5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.btn{border:1px solid var(--line);background:var(--bg);color:var(--ink2);border-radius:6px;font:500 12.5px var(--sans);padding:4px 10px;cursor:pointer}
+.btn[hidden]{display:none}
+.result{background:var(--bg);border-radius:8px;padding:8px 10px;margin:6px 0}
+.result[hidden]{display:none}
+.result b{font:600 18px/1.2 var(--mono)}
+.result small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.modes{display:grid;gap:4px;margin:6px 0}
+.modes[hidden]{display:none}
+.modes button{display:grid;grid-template-columns:14px 1fr auto auto;gap:8px;align-items:center;text-align:left;
+ border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:6px;padding:6px 8px;font:13px var(--sans);cursor:pointer}
+.modes button[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.modes i{width:12px;height:4px;border-radius:2px}
+.modes b{font:600 13px var(--mono)}
 .credits{font-size:11.5px;color:var(--muted);margin:12px 0 0;line-height:1.45}
 a{color:var(--accent)}
 .toggle{display:none}
@@ -58,7 +81,7 @@ a{color:var(--accent)}
   <p class="sub">LiDAR digital twin base layer</p>
   <p class="lede">Buildings with roof heights, individual tree crowns and the ground surface, all derived from
     Environment Agency 1&nbsp;m LiDAR for 100&nbsp;km² of Exeter, with no building or tree data as input,
-    plus Census 2021 residents at their addresses. Click a building or a tree.</p>
+    plus Census 2021 residents at their addresses. Click a building or a tree, or use the tools to count residents in an area or time a trip.</p>
   <div class="eyebrow">Building height (roof, 95th percentile)</div>
   <div class="ramp bld"></div>
   <div class="ticks"><span>3 m</span><span>5</span><span>8</span><span>12</span><span>20+ m</span></div>
@@ -68,6 +91,13 @@ a{color:var(--accent)}
   <div class="eyebrow">Residents per 5 m cell (Census 2021)</div>
   <div class="classes"><span style="background:#c6dbef"></span><span style="background:#9ecae1"></span><span style="background:#6baed6"></span><span style="background:#4292c6"></span><span style="background:#2171b5"></span><span style="background:#084594"></span></div>
   <div class="ticks"><span>1</span><span>2</span><span>3</span><span>5</span><span>10</span><span>20+</span></div>
+  <div class="eyebrow">Roads (OS Open Roads)</div>
+  <div class="roadkey">
+    <span><i style="border-color:#1c7ed6;border-top-width:4px"></i>Motorway</span>
+    <span><i style="border-color:#e8590c;border-top-width:3px"></i>A road</span>
+    <span><i style="border-color:#f59f00;border-top-width:3px"></i>B road</span>
+    <span><i style="border-color:#6c757d;border-top-width:2px"></i>Other</span>
+  </div>
   <div class="eyebrow">Layers</div>
   <div class="layers">
     <label><input type="checkbox" id="l-buildings" checked> Buildings</label>
@@ -76,10 +106,31 @@ a{color:var(--accent)}
     <label><input type="checkbox" id="l-hillshade" checked> Hillshade</label>
     <label><input type="checkbox" id="l-rail" checked> Railways</label>
     <label><input type="checkbox" id="l-population"> Population</label>
+    <label><input type="checkbox" id="l-roads" checked> Roads</label>
   </div>
   <div class="eyebrow">View</div>
   <div class="seg" role="group" aria-label="View">
     <button id="v3d" aria-pressed="true">3D</button><button id="v2d" aria-pressed="false">2D</button>
+  </div>
+  <div class="eyebrow">Tools</div>
+  <div class="seg" role="group" aria-label="Tools">
+    <button id="t-count" aria-pressed="false">Count people</button><button id="t-route" aria-pressed="false">Route</button>
+  </div>
+  <div class="tool" id="ui-count" hidden>
+    <div class="seg small" role="group" aria-label="Shape">
+      <button id="shape-poly" aria-pressed="true">Draw an area</button><button id="shape-circle" aria-pressed="false">Circle</button>
+    </div>
+    <div class="row" id="radius-row" hidden><label for="radius">Radius</label><input type="number" id="radius" value="400" min="25" max="5000" step="25"> m</div>
+    <p class="hint" id="count-hint"></p>
+    <div class="result" id="count-result" hidden></div>
+    <div class="row"><button class="btn" id="count-finish" hidden>Finish area</button><button class="btn" id="count-clear">Clear</button></div>
+  </div>
+  <div class="tool" id="ui-route" hidden>
+    <p class="hint" id="route-hint"></p>
+    <div class="modes" id="route-modes" hidden></div>
+    <p class="hint" id="route-note" hidden>Estimate on OS Open Roads: typical speeds with no traffic, one-way
+      streets or turn bans; walking and cycling follow roads only (footpaths aren't in the data).</p>
+    <div class="row"><button class="btn" id="route-clear">Clear</button></div>
   </div>
   <div class="stats">
     <div><b id="s-buildings">…</b><span>buildings</span></div>
@@ -111,6 +162,14 @@ const BLD_COLOUR = ["interpolate", ["linear"], BLD_H, 3, "#fff2cc", 5, "#f6c27a"
 const TREE_H = ["coalesce", ["get", "height_max_m"], 0];
 const TREE_COLOUR = ["interpolate", ["linear"], TREE_H, 4, "#d9f0a3", 10, "#78c679", 15, "#31a354", 20, "#006837", 30, "#00341c"];
 
+const EMPTY = {type: "FeatureCollection", features: []};
+let roadsData = null, tool = null;
+const roadsReady = fetch(BASE + "roads.geojson").then(r => r.json()).then(d => {
+  roadsData = d;
+  if (map.getSource("roads")) map.getSource("roads").setData(d);
+  return d;
+});
+
 const map = new maplibregl.Map({
   container: "map",
   style: "https://tiles.openfreemap.org/styles/positron",
@@ -138,6 +197,20 @@ map.on("load", () => {
   map.addLayer({id: "population", type: "raster", source: "population", layout: {visibility: "none"},
     paint: {"raster-resampling": "nearest", "raster-opacity": 0.95}}, firstSymbolLayer());
 
+  // OS Open Roads replaces the basemap's own roads (its road names stay)
+  for (const l of map.getStyle().layers) if (l["source-layer"] === "transportation") map.setLayoutProperty(l.id, "visibility", "none");
+  map.addSource("roads", {type: "geojson", data: roadsData || EMPTY,
+    attribution: "Roads: OS Open Roads © Crown copyright and database right 2026"});
+  map.addLayer({id: "roads", type: "line", source: "roads", layout: {"line-cap": "round", "line-join": "round"}, paint: {
+    "line-color": ["match", ["get", "c"], "motorway", "#1c7ed6", "a_road", "#e8590c", "b_road", "#f59f00",
+      "minor", "#6c757d", "local", "#868e96", "#adb5bd"],
+    "line-width": ["interpolate", ["linear"], ["zoom"],
+      11, ["*", 0.35, ["match", ["get", "c"], "motorway", 4, "a_road", 3, "b_road", 2.5, "minor", 2, "local", 1.6, 1.2]],
+      16, ["*", 1.6, ["match", ["get", "c"], "motorway", 4, "a_road", 3, "b_road", 2.5, "minor", 2, "local", 1.6, 1.2]]]}},
+    firstSymbolLayer());
+  map.addSource("aoi", {type: "geojson", data: BASE + "aoi.geojson"});
+  map.addLayer({id: "aoi", type: "line", source: "aoi", paint: {"line-color": "#0b6e64", "line-width": 1.5, "line-dasharray": [4, 2]}});
+
   map.addSource("rail", {type: "geojson", data: BASE + "rail.geojson"});
   map.addLayer({id: "rail", type: "line", source: "rail", paint: {
     "line-color": ["case", ["get", "on_bridge"], "#7a3e9d", "#4b555a"],
@@ -154,6 +227,17 @@ map.on("load", () => {
   map.addSource("buildings", {type: "vector", url: "pmtiles://" + BASE + "buildings.pmtiles"});
   map.addLayer({id: "buildings", type: "fill-extrusion", source: "buildings", "source-layer": "buildings", paint: {
     "fill-extrusion-color": BLD_COLOUR, "fill-extrusion-height": BLD_H, "fill-extrusion-opacity": 0.95}});
+
+  // tool drawings on top of everything
+  map.addSource("draw", {type: "geojson", data: EMPTY});
+  map.addLayer({id: "draw-fill", type: "fill", source: "draw", filter: ["==", ["geometry-type"], "Polygon"],
+    paint: {"fill-color": "#1971c2", "fill-opacity": 0.15}});
+  map.addLayer({id: "draw-line", type: "line", source: "draw", filter: ["!=", ["geometry-type"], "Point"],
+    layout: {"line-cap": "round", "line-join": "round"},
+    paint: {"line-color": ["coalesce", ["get", "colour"], "#1971c2"], "line-width": ["coalesce", ["get", "width"], 2.5]}});
+  map.addLayer({id: "draw-point", type: "circle", source: "draw", filter: ["==", ["geometry-type"], "Point"],
+    paint: {"circle-radius": ["coalesce", ["get", "r"], 4], "circle-color": ["coalesce", ["get", "colour"], "#1971c2"],
+      "circle-stroke-color": "#fff", "circle-stroke-width": 1.5}});
 });
 
 function firstSymbolLayer() {
@@ -162,6 +246,7 @@ function firstSymbolLayer() {
 }
 
 map.on("click", "buildings", (e) => {
+  if (tool) return;
   const p = e.features[0].properties;
   new maplibregl.Popup({maxWidth: "250px"}).setLngLat(e.lngLat).setHTML(
     `<b>Building</b><br>Highest point <b>${p.height_max_m} m</b><br>Roof (95th pct) <b>${p.height_p95_m} m</b><br>` +
@@ -169,19 +254,19 @@ map.on("click", "buildings", (e) => {
   ).addTo(map);
 });
 map.on("click", "trees", (e) => {
-  if (map.queryRenderedFeatures(e.point, {layers: ["buildings"]}).length) return;
+  if (tool || map.queryRenderedFeatures(e.point, {layers: ["buildings"]}).length) return;
   const p = e.features[0].properties;
   new maplibregl.Popup({maxWidth: "220px"}).setLngLat(e.lngLat).setHTML(
     `<b>Tree</b><br>Height <b>${p.height_max_m} m</b><br>Crown diameter <b>${p.crown_diameter_m} m</b>`
   ).addTo(map);
 });
 for (const id of ["buildings", "trees"]) {
-  map.on("mouseenter", id, () => map.getCanvas().style.cursor = "pointer");
-  map.on("mouseleave", id, () => map.getCanvas().style.cursor = "");
+  map.on("mouseenter", id, () => { if (!tool) map.getCanvas().style.cursor = "pointer"; });
+  map.on("mouseleave", id, () => { if (!tool) map.getCanvas().style.cursor = ""; });
 }
 
 const show = (id, on) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
-for (const id of ["buildings", "trees", "hillshade", "rail", "population"])
+for (const id of ["buildings", "trees", "hillshade", "rail", "population", "roads"])
   document.getElementById("l-" + id).onchange = (e) => show(id, e.target.checked);
 document.getElementById("l-terrain").onchange = (e) =>
   map.setTerrain(e.target.checked ? {source: "dem", exaggeration: 1} : null);
@@ -200,6 +285,316 @@ fetch(BASE + "stats.json").then(r => r.json()).then(s => {
   document.getElementById("s-f1").textContent = s.area_f1.toFixed(3);
   if (s.residents) document.getElementById("s-residents").textContent = s.residents.toLocaleString();
 }).catch(() => {});
+
+// ---------- Tools: shared geometry (local metres around Exeter; error well under 1% over 10 km)
+const $ = (id) => document.getElementById(id);
+const LAT0 = 50.74, KX = 111320 * Math.cos(LAT0 * Math.PI / 180), KY = 110574;
+const xy = ([lon, lat]) => [lon * KX, lat * KY];
+const metres = (a, b) => Math.hypot((a[0] - b[0]) * KX, (a[1] - b[1]) * KY);
+function inRing(pt, ring) {  // ray casting; ring as [[lon, lat], ...]
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+let aoiRing = null;
+fetch(BASE + "aoi.geojson").then(r => r.json()).then(d => aoiRing = d.features[0].geometry.coordinates[0]);
+const inAoi = (pt) => !aoiRing || inRing(pt, aoiRing);
+const setDraw = (features) => map.getSource("draw") && map.getSource("draw").setData({type: "FeatureCollection", features});
+const pointF = (c, props = {}) => ({type: "Feature", properties: props, geometry: {type: "Point", coordinates: c}});
+const lineF = (c, props = {}) => ({type: "Feature", properties: props, geometry: {type: "LineString", coordinates: c}});
+const fmt = (n) => Math.round(n).toLocaleString();
+
+function setTool(name) {
+  tool = tool === name ? null : name;
+  $("t-count").setAttribute("aria-pressed", tool === "count");
+  $("t-route").setAttribute("aria-pressed", tool === "route");
+  $("ui-count").hidden = tool !== "count";
+  $("ui-route").hidden = tool !== "route";
+  map.getCanvas().style.cursor = tool ? "crosshair" : "";
+  tool === "count" && shape === "poly" ? map.doubleClickZoom.disable() : map.doubleClickZoom.enable();
+  clearCount(); clearRoute();
+  if (tool === "count") loadCells();
+}
+$("t-count").onclick = () => setTool("count");
+$("t-route").onclick = () => setTool("route");
+
+map.on("click", (e) => {
+  const pt = [e.lngLat.lng, e.lngLat.lat];
+  if (tool === "count") countClick(pt);
+  else if (tool === "route") routeClick(pt);
+});
+map.on("dblclick", () => { if (tool === "count" && shape === "poly") finishArea(true); });
+map.on("mousemove", (e) => {
+  if (tool === "count" && shape === "poly" && verts.length && !closed) drawArea([e.lngLat.lng, e.lngLat.lat]);
+});
+
+// ---------- Count people: residents of the 5 m cells whose centre is inside the shape
+let cells = null, shape = "poly", verts = [], closed = false, centre = null;
+function loadCells() {
+  if (cells) return;
+  countHint();
+  fetch(BASE + "population_cells.json").then(r => r.json()).then(d => { cells = Float64Array.from(d); countHint(); });
+}
+function countHint() {
+  $("count-hint").textContent = !cells ? "Loading residents…" : shape === "poly"
+    ? "Click the corners of an area inside the square; double-click (or Finish area) to close it."
+    : "Click the centre of a circle inside the square.";
+}
+function setShape(s) {
+  shape = s;
+  $("shape-poly").setAttribute("aria-pressed", s === "poly");
+  $("shape-circle").setAttribute("aria-pressed", s === "circle");
+  $("radius-row").hidden = s !== "circle";
+  s === "poly" ? map.doubleClickZoom.disable() : map.doubleClickZoom.enable();
+  clearCount();
+}
+$("shape-poly").onclick = () => setShape("poly");
+$("shape-circle").onclick = () => setShape("circle");
+$("radius").oninput = () => { if (centre) countCircle(); };
+$("count-clear").onclick = clearCount;
+$("count-finish").onclick = () => finishArea(false);
+
+function clearCount() {
+  verts = []; closed = false; centre = null;
+  $("count-result").hidden = true; $("count-finish").hidden = true;
+  countHint(); setDraw([]);
+}
+function countClick(pt) {
+  if (!cells) return;
+  if (!inAoi(pt)) { $("count-hint").textContent = "That's outside the square: residents are only known inside it."; return; }
+  if (shape === "circle") { centre = pt; countCircle(); return; }
+  if (closed) clearCount();
+  verts.push(pt);
+  $("count-finish").hidden = verts.length < 3;
+  drawArea();
+}
+function drawArea(cursor) {
+  const f = verts.map(v => pointF(v, {r: 3.5}));
+  if (closed) f.push({type: "Feature", properties: {}, geometry: {type: "Polygon", coordinates: [[...verts, verts[0]]]}});
+  else {
+    const line = cursor ? [...verts, cursor] : verts;
+    if (line.length > 1) f.push(lineF(line, {width: 2}));
+  }
+  setDraw(f);
+}
+function finishArea(fromDblclick) {
+  if (closed) return;
+  // a double-click has also fired two clicks: drop the second, (nearly) identical corner
+  if (fromDblclick && verts.length > 1) {
+    const a = map.project(verts.at(-1)), b = map.project(verts.at(-2));
+    if (Math.hypot(a.x - b.x, a.y - b.y) < 6) verts.pop();
+  }
+  if (verts.length < 3) return;
+  closed = true; $("count-finish").hidden = true;
+  drawArea();
+  const ring = [...verts, verts[0]];
+  showCount(sumWhere(c => inRing(c, ring), bbox(ring)), areaM2(ring));
+}
+function countCircle() {
+  const r = Math.max(+$("radius").value || 0, 1), ring = [];
+  for (let i = 0; i <= 72; i++) {
+    const a = 2 * Math.PI * i / 72;
+    ring.push([centre[0] + r * Math.cos(a) / KX, centre[1] + r * Math.sin(a) / KY]);
+  }
+  setDraw([{type: "Feature", properties: {}, geometry: {type: "Polygon", coordinates: [ring]}}, pointF(centre, {r: 3.5})]);
+  showCount(sumWhere(c => metres(c, centre) <= r, bbox(ring)), Math.PI * r * r);
+}
+function bbox(ring) {
+  const xs = ring.map(p => p[0]), ys = ring.map(p => p[1]);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+function sumWhere(test, [x0, y0, x1, y1]) {
+  let people = 0, n = 0;
+  for (let i = 0; i < cells.length; i += 3) {
+    const x = cells[i], y = cells[i + 1];
+    if (x < x0 || x > x1 || y < y0 || y > y1 || !test([x, y])) continue;
+    people += cells[i + 2]; n++;
+  }
+  return {people, n};
+}
+function areaM2(ring) {  // shoelace in local metres
+  let a = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x0, y0] = xy(ring[i]), [x1, y1] = xy(ring[i + 1]);
+    a += x0 * y1 - x1 * y0;
+  }
+  return Math.abs(a / 2);
+}
+function showCount({people, n}, area) {
+  const km2 = area / 1e6;
+  $("count-result").hidden = false;
+  $("count-result").innerHTML = `<b>${fmt(people)}</b> residents` +
+    `<small>${km2 < 0.1 ? fmt(area) + " m²" : km2.toFixed(2) + " km²"} · ${fmt(people / km2)} per km² · ` +
+    `${fmt(n)} populated 5 m cells · Census 2021</small>`;
+}
+
+// ---------- Route: snap each click to the nearest road the mode may use, then Dijkstra between junctions
+const MODES = [
+  {id: "drive", label: "Drive", colour: "#c2255c", kmh: (p) => p.v},
+  {id: "cycle", label: "Cycle", colour: "#2f9e44", kmh: (p) => p.f ? 15 : 0},
+  {id: "walk", label: "Walk", colour: "#7048e8", kmh: (p) => p.f ? 4.8 : 0},
+];
+let graph = null, ends = [], routes = {}, shownMode = "drive";
+function buildGraph(d) {
+  const edges = [], adj = new Map();
+  for (const f of d.features) {
+    const p = f.properties;
+    if (!p.r) continue;  // fragments cut off by the network's margin
+    const c = f.geometry.coordinates, cum = [0];
+    for (let i = 1; i < c.length; i++) cum.push(cum[i - 1] + metres(c[i - 1], c[i]));
+    const e = {a: p.a, b: p.b, l: p.l, c, cum, p};
+    edges.push(e);
+    for (const n of [p.a, p.b]) { if (!adj.has(n)) adj.set(n, []); adj.get(n).push(e); }
+  }
+  return {edges, adj};
+}
+roadsReady.then(d => { graph = buildGraph(d); routeHint(); });
+const secs = (e, mode) => { const k = mode.kmh(e.p); return k > 0 ? e.l / (k / 3.6) : Infinity; };
+
+function snap(pt, mode) {  // nearest point on a road the mode may use: its edge, fraction t along it, the point
+  const P = xy(pt);
+  let best = {d: Infinity};
+  for (const e of graph.edges) {
+    if (!(mode.kmh(e.p) > 0)) continue;
+    for (let i = 1; i < e.c.length; i++) {
+      const A = xy(e.c[i - 1]), B = xy(e.c[i]), dx = B[0] - A[0], dy = B[1] - A[1], len2 = dx * dx + dy * dy;
+      const u = len2 ? Math.max(0, Math.min(1, ((P[0] - A[0]) * dx + (P[1] - A[1]) * dy) / len2)) : 0;
+      const d = Math.hypot(A[0] + u * dx - P[0], A[1] + u * dy - P[1]);
+      if (d < best.d) {
+        const L = e.cum.at(-1), along = e.cum[i - 1] + u * (e.cum[i] - e.cum[i - 1]);
+        best = {d, e, t: L ? along / L : 0,
+          at: [e.c[i - 1][0] + u * (e.c[i][0] - e.c[i - 1][0]), e.c[i - 1][1] + u * (e.c[i][1] - e.c[i - 1][1])]};
+      }
+    }
+  }
+  return best;
+}
+function piece(e, t0, t1) {  // coordinates of edge e from fraction t0 to t1 (either direction)
+  const lo = Math.min(t0, t1), hi = Math.max(t0, t1), L = e.cum.at(-1);
+  const at = (t) => {
+    const s = t * L;
+    let i = 1;
+    while (i < e.cum.length - 1 && e.cum[i] < s) i++;
+    const seg = e.cum[i] - e.cum[i - 1], u = seg ? (s - e.cum[i - 1]) / seg : 0;
+    return [e.c[i - 1][0] + u * (e.c[i][0] - e.c[i - 1][0]), e.c[i - 1][1] + u * (e.c[i][1] - e.c[i - 1][1])];
+  };
+  const out = [at(lo)];
+  for (let i = 1; i < e.c.length - 1; i++) if (e.cum[i] > lo * L && e.cum[i] < hi * L) out.push(e.c[i]);
+  out.push(at(hi));
+  return t0 > t1 ? out.reverse() : out;
+}
+class Heap {  // binary min-heap of [cost, node]
+  constructor() { this.h = []; }
+  get size() { return this.h.length; }
+  push(x) {
+    const h = this.h; h.push(x);
+    for (let i = h.length - 1; i > 0;) {
+      const j = (i - 1) >> 1;
+      if (h[j][0] <= h[i][0]) break;
+      [h[i], h[j]] = [h[j], h[i]]; i = j;
+    }
+  }
+  pop() {
+    const h = this.h, top = h[0], last = h.pop();
+    if (h.length) {
+      h[0] = last;
+      for (let i = 0; ;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < h.length && h[l][0] < h[m][0]) m = l;
+        if (r < h.length && h[r][0] < h[m][0]) m = r;
+        if (m === i) break;
+        [h[i], h[m]] = [h[m], h[i]]; i = m;
+      }
+    }
+    return top;
+  }
+}
+function route(mode) {
+  const s = snap(ends[0], mode), g = snap(ends[1], mode);
+  if (!s.e || !g.e) return null;
+  const cs = secs(s.e, mode), cg = secs(g.e, mode);
+  const dist = new Map(), prev = new Map(), heap = new Heap();
+  // the start lies on edge s.e: its two junctions are reached along that edge
+  for (const [n, c] of [[s.e.a, s.t * cs], [s.e.b, (1 - s.t) * cs]]) {
+    if (c < (dist.get(n) ?? Infinity)) { dist.set(n, c); prev.set(n, null); heap.push([c, n]); }
+  }
+  while (heap.size) {
+    const [c, n] = heap.pop();
+    if (c > dist.get(n)) continue;
+    for (const e of graph.adj.get(n) || []) {
+      const w = secs(e, mode);
+      if (w === Infinity) continue;
+      const m = e.a === n ? e.b : e.a, nc = c + w;
+      if (nc < (dist.get(m) ?? Infinity)) { dist.set(m, nc); prev.set(m, e); heap.push([nc, m]); }
+    }
+  }
+  // the end lies on edge g.e: arrive from the quicker junction, or along the start's own edge
+  const viaA = (dist.get(g.e.a) ?? Infinity) + g.t * cg, viaB = (dist.get(g.e.b) ?? Infinity) + (1 - g.t) * cg;
+  const direct = s.e === g.e ? Math.abs(s.t - g.t) * cs : Infinity;
+  const best = Math.min(viaA, viaB, direct);
+  if (best === Infinity) return null;
+  let coords;
+  if (best === direct) coords = piece(s.e, s.t, g.t);
+  else {
+    const last = viaA <= viaB ? g.e.a : g.e.b, chain = [];
+    let first = last;
+    for (let n = last, e; (e = prev.get(n));) { chain.push([e, n]); n = e.a === n ? e.b : e.a; first = n; }
+    chain.reverse();
+    coords = piece(s.e, s.t, first === s.e.a ? 0 : 1);
+    for (const [e, to] of chain) coords.push(...(to === e.b ? e.c : [...e.c].reverse()));
+    coords.push(...piece(g.e, last === g.e.a ? 0 : 1, g.t));
+  }
+  let m = 0;
+  for (let i = 1; i < coords.length; i++) m += metres(coords[i - 1], coords[i]);
+  return {secs: best, metres: m, coords, from: s.at, to: g.at};
+}
+function routeHint() {
+  $("route-hint").textContent = !graph ? "Loading roads…"
+    : ends.length === 0 ? "Click a start point inside the square (dashed outline)."
+    : ends.length === 1 ? "Now click the end point." : "Click again to start a new trip.";
+}
+function routeClick(pt) {
+  if (!graph) return;
+  if (!inAoi(pt)) { $("route-hint").textContent = "Pick points inside the square (the dashed outline)."; return; }
+  if (ends.length === 2) clearRoute();
+  ends.push(pt);
+  routeHint();
+  if (ends.length === 2) {
+    routes = {};
+    for (const m of MODES) routes[m.id] = route(m);
+    showRoutes();
+  } else drawRoute();
+}
+function showRoutes() {
+  $("route-modes").hidden = false; $("route-note").hidden = false;
+  $("route-modes").innerHTML = MODES.map(m => {
+    const r = routes[m.id];
+    const val = r ? `<b>${(r.metres / 1000).toFixed(1)} km</b><b>${Math.max(1, Math.round(r.secs / 60))} min</b>`
+                  : "<b>no route</b><b></b>";
+    return `<button data-mode="${m.id}" aria-pressed="${m.id === shownMode}"><i style="background:${m.colour}"></i>${m.label}${val}</button>`;
+  }).join("");
+  for (const b of $("route-modes").querySelectorAll("button")) b.onclick = () => { shownMode = b.dataset.mode; showRoutes(); };
+  drawRoute();
+}
+function drawRoute() {
+  const f = [], r = routes[shownMode], m = MODES.find(x => x.id === shownMode);
+  if (ends.length === 2 && r) {
+    f.push(lineF(r.coords, {colour: m.colour, width: 5}));
+    f.push(lineF([ends[0], r.from], {colour: m.colour, width: 1.5}), lineF([r.to, ends[1]], {colour: m.colour, width: 1.5}));
+  }
+  ends.forEach((e, i) => f.push(pointF(e, {r: 6, colour: i ? "#e03131" : "#2b8a3e"})));
+  setDraw(f);
+}
+function clearRoute() {
+  ends = []; routes = {};
+  $("route-modes").hidden = true; $("route-note").hidden = true;
+  routeHint(); setDraw([]);
+}
+$("route-clear").onclick = clearRoute;
 
 const panel = document.getElementById("panel"), toggle = document.getElementById("toggle");
 toggle.onclick = () => {
