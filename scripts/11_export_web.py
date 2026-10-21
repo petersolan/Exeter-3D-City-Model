@@ -7,6 +7,8 @@ Writes to site/data/:
                       simplified by 0.5 m
   rail.geojson        railway lines, with viaducts and bridges flagged (OpenStreetMap,
                       prepare_osm_structures.py)
+  population/{z}/{x}/{y}.png   Census 2021 residents per 5 m cell (14_population_raster.py),
+                      coloured in POP_CLASSES (Blues), transparent where nobody lives
   terrain/{z}/{x}/{y}.png   the LiDAR DTM as terrain-RGB tiles (Mapbox encoding,
                       0.1 m steps) at TERRAIN_RES_M, for MapLibre's 3D terrain and hillshade
   stats.json          headline numbers shown on the page
@@ -39,6 +41,10 @@ RAIL = config.DATA / "osm" / "structures.gpkg"
 TERRAIN_RES_M = 5.0
 TERRAIN_ZOOMS = "10-15"
 SIMPLIFY_M = 0.5
+POPULATION = config.OUTPUTS / "population" / "population_5m.tif"
+POP_ZOOMS = "11-16"
+# (lowest residents in the class, colour): ColorBrewer Blues; the page's legend uses the same
+POP_CLASSES = [(1, "#c6dbef"), (2, "#9ecae1"), (3, "#6baed6"), (5, "#4292c6"), (10, "#2171b5"), (20, "#084594")]
 
 
 def to_pmtiles(gdf, out, layer, minzoom, maxzoom):
@@ -58,6 +64,38 @@ def prepare(path, columns, layer=None):
     return gdf.to_crs("EPSG:4326")
 
 
+def xyz_tiles(tif, out_dir, zooms):
+    """GeoTIFF -> XYZ PNG tiles with gdal2tiles (nearest neighbour)."""
+    shutil.rmtree(out_dir, ignore_errors=True)
+    gdal2tiles = Path(sys.executable).parent / "Scripts" / "gdal2tiles.py"
+    cmd = [sys.executable, str(gdal2tiles)] if gdal2tiles.exists() else ["gdal2tiles"]
+    subprocess.run(cmd + ["--xyz", "-z", zooms, "-r", "near", "-w", "none", "--processes=4",
+                          "-q", str(tif), str(out_dir)], check=True)
+    n = sum(1 for _ in out_dir.rglob("*.png"))
+    size = sum(p.stat().st_size for p in out_dir.rglob("*.png")) / 1e6
+    return n, size
+
+
+def population_tiles(out_dir):
+    """Residents per 5 m cell -> RGBA in POP_CLASSES -> XYZ PNG tiles."""
+    with rasterio.open(POPULATION) as src:
+        pop, crs, transform = src.read(1), src.crs, src.transform
+    rgba = np.zeros((4,) + pop.shape, np.uint8)
+    for low, colour in POP_CLASSES:
+        cls = pop >= low
+        for band, value in enumerate((*bytes.fromhex(colour[1:]), 255)):
+            rgba[band][cls] = value
+    with tempfile.TemporaryDirectory() as tmp:
+        tif = Path(tmp) / "population_rgba.tif"
+        profile = {"driver": "GTiff", "width": pop.shape[1], "height": pop.shape[0], "count": 4,
+                   "dtype": "uint8", "crs": crs, "transform": transform, "photometric": "RGB", "alpha": "YES"}
+        with rasterio.open(tif, "w", **profile) as dst:
+            dst.write(rgba)
+        n, size = xyz_tiles(tif, out_dir, POP_ZOOMS)
+    print(f"population: {n:,} tiles ({size:.1f} MB), {int(pop.sum()):,} residents -> {out_dir}")
+    return int(pop.sum())
+
+
 def terrain_tiles(out_dir):
     """DTM -> Web Mercator at TERRAIN_RES_M -> terrain-RGB GeoTIFF -> XYZ PNG tiles."""
     with rasterio.open(config.DTM_PATH) as src:
@@ -69,7 +107,6 @@ def terrain_tiles(out_dir):
     dem = np.where(np.isnan(dem), 0, dem)  # outside the AOI: sea level (the view is kept inside)
     code = np.round((dem + 10000) / 0.1).astype(np.uint32)
     rgb = np.stack([(code >> 16) & 255, (code >> 8) & 255, code & 255]).astype(np.uint8)
-    shutil.rmtree(out_dir, ignore_errors=True)
     with tempfile.TemporaryDirectory() as tmp:
         tif = Path(tmp) / "terrain_rgb.tif"
         profile = {"driver": "GTiff", "width": w, "height": h, "count": 3, "dtype": "uint8",
@@ -77,12 +114,7 @@ def terrain_tiles(out_dir):
         with rasterio.open(tif, "w", **profile) as dst:
             dst.write(rgb)
         # nearest neighbour only: averaging encoded RGB values would corrupt the heights
-        gdal2tiles = Path(sys.executable).parent / "Scripts" / "gdal2tiles.py"
-        cmd = [sys.executable, str(gdal2tiles)] if gdal2tiles.exists() else ["gdal2tiles"]
-        subprocess.run(cmd + ["--xyz", "-z", TERRAIN_ZOOMS, "-r", "near", "-w", "none", "--processes=4",
-                              "-q", str(tif), str(out_dir)], check=True)
-    n = sum(1 for _ in out_dir.rglob("*.png"))
-    size = sum(p.stat().st_size for p in out_dir.rglob("*.png")) / 1e6
+        n, size = xyz_tiles(tif, out_dir, TERRAIN_ZOOMS)
     print(f"terrain: {n:,} tiles ({size:.1f} MB) at {TERRAIN_RES_M:g} m -> {out_dir}")
 
 
@@ -104,6 +136,7 @@ def main() -> None:
                                      layer_options={"COORDINATE_PRECISION": 6, "RFC7946": "YES"})
 
     terrain_tiles(SITE / "terrain")
+    residents = population_tiles(SITE / "population")
 
     summary_path = config.OUTPUTS / "eval" / "summary.csv"
     summary = pd.read_csv(summary_path).set_index("dataset")
@@ -111,7 +144,7 @@ def main() -> None:
     current = summary_path.stat().st_mtime > BUILDINGS.stat().st_mtime
     final = summary.loc["lidar_final"] if current and "lidar_final" in summary.index else summary.loc["lidar"]
     heights = pd.read_csv(config.OUTPUTS / "eval" / "heights.csv")
-    stats = {"buildings": int(len(b)), "trees": int(len(t)), "area_f1": round(float(final["f1"]), 3),
+    stats = {"buildings": int(len(b)), "trees": int(len(t)), "residents": residents, "area_f1": round(float(final["f1"]), 3),
              "height_within_2m_pct": round(float(heights.iloc[0].filter(like="within_2").iloc[0]), 0)}
     (SITE / "stats.json").write_text(json.dumps(stats, indent=1), encoding="utf-8")
     print("stats:", stats)

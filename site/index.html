@@ -27,6 +27,9 @@ h1{font-size:19px;line-height:1.25;margin:0 0 2px}
 .ramp{height:10px;border-radius:3px}
 .ramp.bld{background:linear-gradient(90deg,#fff2cc,#f6c27a,#e8673c,#b3122e,#4a0a45)}
 .ramp.tree{background:linear-gradient(90deg,#d9f0a3,#78c679,#31a354,#006837,#00341c)}
+.classes{display:grid;grid-template-columns:repeat(6,1fr);gap:2px}
+.classes span{height:10px}
+.classes span:first-child{border-radius:3px 0 0 3px} .classes span:last-child{border-radius:0 3px 3px 0}
 .ticks{display:flex;justify-content:space-between;font:500 12px/1 var(--mono);color:var(--muted);margin-top:4px}
 .layers{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:13.5px;color:var(--ink2)}
 .layers label{display:flex;align-items:center;gap:6px;cursor:pointer}
@@ -34,7 +37,7 @@ h1{font-size:19px;line-height:1.25;margin:0 0 2px}
 .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .seg button{flex:1;border:0;background:none;color:var(--ink2);font:500 13px var(--sans);padding:7px 4px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:12px}
 .stats div{background:var(--bg);border-radius:6px;padding:6px 8px}
 .stats b{display:block;font:600 16px/1.2 var(--mono)} .stats span{font-size:11.5px;color:var(--muted)}
 .credits{font-size:11.5px;color:var(--muted);margin:12px 0 0;line-height:1.45}
@@ -54,14 +57,17 @@ a{color:var(--accent)}
   <h1>Exeter 3D City Model</h1>
   <p class="sub">LiDAR digital twin base layer</p>
   <p class="lede">Buildings with roof heights, individual tree crowns and the ground surface, all derived from
-    Environment Agency 1&nbsp;m LiDAR for 100&nbsp;km² of Exeter, with no building or tree data as input.
-    Click a building or a tree.</p>
+    Environment Agency 1&nbsp;m LiDAR for 100&nbsp;km² of Exeter, with no building or tree data as input,
+    plus Census 2021 residents at their addresses. Click a building or a tree.</p>
   <div class="eyebrow">Building height (roof, 95th percentile)</div>
   <div class="ramp bld"></div>
   <div class="ticks"><span>3 m</span><span>5</span><span>8</span><span>12</span><span>20+ m</span></div>
   <div class="eyebrow">Tree height</div>
   <div class="ramp tree"></div>
   <div class="ticks"><span>4 m</span><span>10</span><span>15</span><span>20</span><span>30+ m</span></div>
+  <div class="eyebrow">Residents per 5 m cell (Census 2021)</div>
+  <div class="classes"><span style="background:#c6dbef"></span><span style="background:#9ecae1"></span><span style="background:#6baed6"></span><span style="background:#4292c6"></span><span style="background:#2171b5"></span><span style="background:#084594"></span></div>
+  <div class="ticks"><span>1</span><span>2</span><span>3</span><span>5</span><span>10</span><span>20+</span></div>
   <div class="eyebrow">Layers</div>
   <div class="layers">
     <label><input type="checkbox" id="l-buildings" checked> Buildings</label>
@@ -69,6 +75,7 @@ a{color:var(--accent)}
     <label><input type="checkbox" id="l-terrain" checked> 3D terrain</label>
     <label><input type="checkbox" id="l-hillshade" checked> Hillshade</label>
     <label><input type="checkbox" id="l-rail" checked> Railways</label>
+    <label><input type="checkbox" id="l-population"> Population</label>
   </div>
   <div class="eyebrow">View</div>
   <div class="seg" role="group" aria-label="View">
@@ -78,6 +85,7 @@ a{color:var(--accent)}
     <div><b id="s-buildings">…</b><span>buildings</span></div>
     <div><b id="s-trees">…</b><span>tree crowns</span></div>
     <div><b id="s-f1">…</b><span>area F1 vs OS</span></div>
+    <div><b id="s-residents">…</b><span>residents</span></div>
   </div>
   <p class="credits">Building scores are against Ordnance Survey's detailed building data, which isn't shown here
     because it can't be redistributed. Method and evaluation: <a href="https://github.com/petersolan/Exeter-3D-City-Model">repository</a>.<br>
@@ -85,7 +93,10 @@ a{color:var(--accent)}
     <a href="https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/">Open Government Licence v3.0</a>
     (LiDAR DSM and DTM). Contains modified Copernicus Sentinel data 2022.
     OS data © Crown copyright and database right 2026 (OS Open Roads, Zoomstack railways).
-    Railways, viaducts and bridges © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> (ODbL).</p>
+    Railways, viaducts and bridges © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> (ODbL).
+    Population: Census 2021 and ONS UPRN Directory, Office for National Statistics (OGL v3), placed on address points by
+    <a href="https://github.com/petersolan/GB-Census-Population-Map">GB Census Population Map</a>; contains OS data © Crown copyright
+    and database right 2026; contains Royal Mail data © Royal Mail copyright and database right 2026.</p>
 </aside>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
 <script src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
@@ -119,6 +130,13 @@ map.on("load", () => {
   map.setTerrain({source: "dem", exaggeration: 1});
   map.addLayer({id: "hillshade", type: "hillshade", source: "dem-shade",
     paint: {"hillshade-exaggeration": 0.35, "hillshade-shadow-color": "#5b6b70"}}, firstSymbolLayer());
+
+  // residents per 5 m cell, pre-coloured (11_export_web.py); off until ticked
+  map.addSource("population", {type: "raster", tiles: [BASE + "population/{z}/{x}/{y}.png"], tileSize: 256,
+    minzoom: 11, maxzoom: 16, bounds: [-3.65, 50.67, -3.41, 50.80],
+    attribution: "Population: ONS Census 2021 (OGL v3)"});
+  map.addLayer({id: "population", type: "raster", source: "population", layout: {visibility: "none"},
+    paint: {"raster-resampling": "nearest", "raster-opacity": 0.95}}, firstSymbolLayer());
 
   map.addSource("rail", {type: "geojson", data: BASE + "rail.geojson"});
   map.addLayer({id: "rail", type: "line", source: "rail", paint: {
@@ -163,7 +181,7 @@ for (const id of ["buildings", "trees"]) {
 }
 
 const show = (id, on) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
-for (const id of ["buildings", "trees", "hillshade", "rail"])
+for (const id of ["buildings", "trees", "hillshade", "rail", "population"])
   document.getElementById("l-" + id).onchange = (e) => show(id, e.target.checked);
 document.getElementById("l-terrain").onchange = (e) =>
   map.setTerrain(e.target.checked ? {source: "dem", exaggeration: 1} : null);
@@ -180,6 +198,7 @@ fetch(BASE + "stats.json").then(r => r.json()).then(s => {
   document.getElementById("s-buildings").textContent = s.buildings.toLocaleString();
   document.getElementById("s-trees").textContent = s.trees.toLocaleString();
   document.getElementById("s-f1").textContent = s.area_f1.toFixed(3);
+  if (s.residents) document.getElementById("s-residents").textContent = s.residents.toLocaleString();
 }).catch(() => {});
 
 const panel = document.getElementById("panel"), toggle = document.getElementById("toggle");

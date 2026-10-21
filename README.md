@@ -156,9 +156,16 @@ spikiness of 0.66, other crowns over 20 m 0.29. These 89 crowns (84 pylons, 5 ma
 their pixels taken out of the vegetation raster. Unmapped tall, spiky crowns are kept: a tall
 conifer looks the same.
 
+**Population** (`14_population_raster.py`): Census 2021 residents of the area (129,391) on a
+5 m grid aligned with the vegetation raster. People come from the companion project
+[GB Census Population Map](https://github.com/petersolan/GB-Census-Population-Map), which places
+Census 2021 counts on address points (ONS UPRN Directory); each cell holds the residents of the
+address points inside it, so a house is one cell and the gardens and roads around it are empty.
+The total matches that project's own 10 m raster over the same square.
+
 **Web viewer** (`11_export_web.py`, `site/`): MapLibre with the LiDAR DTM as 3D terrain and
-hillshade (terrain-RGB tiles), buildings and tree crowns as vector PMTiles (written by GDAL) and
-railways from OpenStreetMap, all static files on GitHub Pages.
+hillshade (terrain-RGB tiles), buildings and tree crowns as vector PMTiles (written by GDAL),
+railways from OpenStreetMap and residents per 5 m cell as Blues raster tiles (off by default), all static files on GitHub Pages.
 
 ## How it is evaluated
 
@@ -459,6 +466,7 @@ All under `outputs/`:
 | `canopy/tree_crowns_filled.gpkg` | The same crowns with single-pixel holes closed (shown in the viewer) |
 | `canopy/removed.tif` | Tall pixels taken out of vegetation: 1 smooth, 2 not green, 3 above 50 m, 4 mapped bridge, 5 mapped pylon or mast |
 | `canopy/removed_towers.gpkg` | Crowns dropped as mapped pylons and masts, with spikiness and distance to the tower |
+| `population/population_5m.tif` | Census 2021 residents per 5 m cell (UInt16, 0 = none), Cloud Optimized GeoTIFF |
 | `eval/canopy_summary.csv` | Vegetation per quadrant |
 | `eval/heights.csv`, `eval/heights_pairs.csv` | Height errors against OS overall, per quadrant and class; every matched pair |
 
@@ -481,10 +489,12 @@ scripts/
                             no argument for the four sample tiles)
   09_object_classifier.py   building / not-building classifier, bridge rule, classifier report
   10_building_heights.py    heights per footprint, checked against OS heights
-  11_export_web.py          buildings, trees, railways (PMTiles / GeoJSON) and terrain tiles for the viewer
+  11_export_web.py          buildings, trees, railways (PMTiles / GeoJSON), terrain and population tiles
+                            for the viewer
   12_canopy_height.py       vegetation height raster, structure removal, bridge deletion and viaduct cut
   13_tree_crowns.py         tree crowns from the canopy height model (mapped pylons dropped), and a
                             hole-filled copy
+  14_population_raster.py   Census 2021 residents per 5 m cell from the census project's address points
   prepare_osm_structures.py bridges, viaducts, railways, platforms, pylons and masts from OpenStreetMap
   prepare_rail.py           railway lines from OS Open Zoomstack (bridge rule)
   explain_building.py       which extraction step loses given OS buildings
@@ -515,6 +525,7 @@ python prepare_osm_structures.py     # OpenStreetMap bridges, viaducts and railw
 python 12_canopy_height.py           # vegetation, structures, bridges and viaducts
 python 13_tree_crowns.py             # tree crowns
 python 04_evaluate.py                # again, to score the final buildings (lidar_final)
+python 14_population_raster.py       # residents per 5 m cell (needs the census project's outputs)
 python 11_export_web.py              # the viewer's data in site/data
 python 05_diagnose_objects.py        # optional: per-footprint statistics
 # optional, with QGIS's Python: a styled QGIS project of all results
@@ -548,6 +559,7 @@ The input data is not included in this repository. Expected layout under `data/`
 | `footprints/os_buildings.parquet` | OS Open building data | OGL v3 |
 | `roads/SX_RoadLink.shp` | OS Open Roads, road links: bridge rule (and `use_roads`) | OGL v3 |
 | `osm/structures.gpkg` | OpenStreetMap bridges, viaducts, railways, platforms, power towers, masts and power lines, from `prepare_osm_structures.py` (Overpass API) | ODbL |
+| `../Census-distribution/data/processed/location_population_points.parquet` | Census 2021 residents on address points, from [GB Census Population Map](https://github.com/petersolan/GB-Census-Population-Map) (`--points` to point elsewhere) | OGL v3 |
 | `roads/zoomstack_rail.gpkg` | OS Open Zoomstack railway lines, cut by `prepare_rail.py` | OGL v3 |
 
 Sentinel-2 L2A is downloaded by `07_sentinel2_ndvi.py` from
@@ -573,6 +585,10 @@ The README images and any outputs derived from this project contain:
   (© OpenStreetMap contributors), under the Open Database License (ODbL),
   used for comparison only; OpenStreetMap railways, viaducts and bridges are also used to
   remove bridges from the vegetation and viaducts from the buildings.
+
+Population: Census 2021 and the ONS UPRN Directory, Office for National Statistics,
+under the Open Government Licence v3.0; contains OS data © Crown copyright and database right 2026;
+contains Royal Mail data © Royal Mail copyright and database right 2026.
 
 The OS National Geographic Database ground truth is used for scoring only; it
 is not redistributed, and no image in this repository shows it.
